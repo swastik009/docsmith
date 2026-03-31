@@ -1,0 +1,252 @@
+# frozen_string_literal: true
+
+module Docsmith
+  # ActiveRecord mixin that adds full versioning to any model.
+  #
+  # Usage:
+  #   class Article < ApplicationRecord
+  #     include Docsmith::Versionable
+  #     docsmith_config { content_field :body; content_type :markdown }
+  #   end
+  module Versionable
+    def self.included(base)
+      base.extend(ClassMethods)
+      base.after_save(:_docsmith_auto_save_callback)
+    end
+
+    module ClassMethods
+      # Configure per-class Docsmith options. All keys optional.
+      # Unset keys fall through to global config then gem defaults.
+      # @yield block evaluated on a Docsmith::ClassConfig instance
+      # @return [Docsmith::ClassConfig]
+      def docsmith_config(&block)
+        @_docsmith_class_config ||= Docsmith::ClassConfig.new
+        @_docsmith_class_config.instance_eval(&block) if block_given?
+        @_docsmith_class_config
+      end
+
+      # @return [Hash] fully resolved config (read-time resolution)
+      def docsmith_resolved_config
+        Docsmith::Configuration.resolve(
+          @_docsmith_class_config&.settings || {},
+          Docsmith.configuration
+        )
+      end
+    end
+
+    # Create a new DocumentVersion snapshot of this record's content.
+    # Returns nil if content is identical to the latest version.
+    # Raises Docsmith::InvalidContentField if content_field returns a non-String
+    # and no content_extractor is configured.
+    #
+    # @param author [Object, nil]
+    # @param summary [String, nil]
+    # @return [Docsmith::DocumentVersion, nil]
+    def save_version!(author:, summary: nil)
+      _sync_docsmith_content!
+      Docsmith::VersionManager.save!(
+        _docsmith_document,
+        author:  author,
+        summary: summary,
+        config:  self.class.docsmith_resolved_config
+      )
+    end
+
+    # Debounced auto-save. Returns nil if debounce window has not elapsed
+    # OR content is unchanged. Both non-save cases return nil.
+    # auto_save: false in config causes this to always return nil.
+    #
+    # @param author [Object, nil]
+    # @return [Docsmith::DocumentVersion, nil]
+    def auto_save_version!(author: nil)
+      config = self.class.docsmith_resolved_config
+      return nil unless config[:auto_save]
+
+      _sync_docsmith_content!
+      Docsmith::AutoSave.call(_docsmith_document, author: author, config: config)
+    end
+
+    # @return [ActiveRecord::Relation<Docsmith::DocumentVersion>] ordered by version_number
+    def versions
+      _docsmith_document.document_versions
+    end
+
+    # @return [Docsmith::DocumentVersion, nil] latest version
+    def current_version
+      _docsmith_document.current_version
+    end
+
+    # @param number [Integer] 1-indexed version_number
+    # @return [Docsmith::DocumentVersion, nil]
+    def version(number)
+      _docsmith_document.document_versions.find_by(version_number: number)
+    end
+
+    # Restore to a previous version. Creates a new version with the old content.
+    # Syncs restored content back to the model's content_field via update_column
+    # (bypasses after_save to prevent a duplicate auto-save).
+    # Never mutates existing versions.
+    #
+    # @param number [Integer] version_number to restore from
+    # @param author [Object, nil]
+    # @return [Docsmith::DocumentVersion]
+    # @raise [Docsmith::VersionNotFound]
+    def restore_version!(number, author:)
+      result = Docsmith::VersionManager.restore!(
+        _docsmith_document,
+        version: number,
+        author:  author,
+        config:  self.class.docsmith_resolved_config
+      )
+      field = self.class.docsmith_resolved_config[:content_field]
+      update_column(field, _docsmith_document.reload.content)
+      result
+    end
+
+    # Tag a specific version. Names are unique per document.
+    # @param number [Integer] version_number to tag
+    # @param name [String]
+    # @param author [Object, nil]
+    # @return [Docsmith::VersionTag]
+    def tag_version!(number, name:, author:)
+      Docsmith::VersionManager.tag!(
+        _docsmith_document, version: number, name: name, author: author)
+    end
+
+    # @param tag_name [String]
+    # @return [Docsmith::DocumentVersion, nil]
+    def tagged_version(tag_name)
+      tag = _docsmith_document.version_tags.find_by(name: tag_name)
+      tag&.version
+    end
+
+    # @param number [Integer] version_number
+    # @return [Array<String>] tag names on that version
+    def version_tags(number)
+      ver = version(number)
+      return [] unless ver
+      ver.version_tags.pluck(:name)
+    end
+
+    # Computes a diff from version N to the current (latest) version.
+    #
+    # @param version_number [Integer]
+    # @return [Docsmith::Diff::Result]
+    # @raise [ActiveRecord::RecordNotFound] if version_number does not exist
+    def diff_from(version_number)
+      doc    = _docsmith_document
+      v_from = Docsmith::DocumentVersion.find_by!(document: doc, version_number: version_number)
+      v_to   = Docsmith::DocumentVersion.where(document_id: doc.id).order(version_number: :desc).first!
+      Docsmith::Diff.between(v_from, v_to)
+    end
+
+    # Computes a diff between two named versions.
+    #
+    # @param from_version [Integer]
+    # @param to_version [Integer]
+    # @return [Docsmith::Diff::Result]
+    # @raise [ActiveRecord::RecordNotFound] if either version does not exist
+    def diff_between(from_version, to_version)
+      doc    = _docsmith_document
+      v_from = Docsmith::DocumentVersion.find_by!(document: doc, version_number: from_version)
+      v_to   = Docsmith::DocumentVersion.find_by!(document: doc, version_number: to_version)
+      Docsmith::Diff.between(v_from, v_to)
+    end
+
+    # Adds a comment to a specific version of this document.
+    #
+    # @param version [Integer] version_number
+    # @param body [String]
+    # @param author [Object] polymorphic author
+    # @param anchor [Hash, nil] { start_offset:, end_offset: } for inline range comments
+    # @param parent [Comments::Comment, nil] parent comment for threading
+    # @return [Docsmith::Comments::Comment]
+    def add_comment!(version:, body:, author:, anchor: nil, parent: nil)
+      Comments::Manager.add!(
+        _docsmith_document,
+        version_number: version,
+        body:           body,
+        author:         author,
+        anchor:         anchor,
+        parent:         parent
+      )
+    end
+
+    # Returns all comments across all versions of this document.
+    #
+    # @return [ActiveRecord::Relation<Docsmith::Comments::Comment>]
+    def comments
+      doc = _docsmith_document
+      Comments::Comment.joins(:version)
+                       .where(docsmith_versions: { document_id: doc.id })
+    end
+
+    # Returns comments on a specific version, optionally filtered by anchor type.
+    #
+    # @param version [Integer] version_number
+    # @param type [Symbol, nil] :document or :range to filter; nil = all
+    # @return [ActiveRecord::Relation<Docsmith::Comments::Comment>]
+    def comments_on(version:, type: nil)
+      doc = _docsmith_document
+      dv  = Docsmith::DocumentVersion.find_by!(document: doc, version_number: version)
+      rel = Comments::Comment.where(version: dv)
+      rel = rel.where(anchor_type: type.to_s) if type
+      rel
+    end
+
+    # Returns all unresolved comments across all versions.
+    #
+    # @return [ActiveRecord::Relation<Docsmith::Comments::Comment>]
+    def unresolved_comments
+      comments.merge(Comments::Comment.unresolved)
+    end
+
+    # Migrates top-level comments from one version to another.
+    #
+    # @param from [Integer] source version_number
+    # @param to [Integer] target version_number
+    # @return [void]
+    def migrate_comments!(from:, to:)
+      Comments::Migrator.migrate!(_docsmith_document, from: from, to: to)
+    end
+
+    private
+
+    # Finds or creates the shadow Docsmith::Document for this record.
+    # Cached in @_docsmith_document after first lookup.
+    def _docsmith_document
+      config = self.class.docsmith_resolved_config
+      @_docsmith_document ||= Docsmith::Document.find_or_create_by!(subject: self) do |doc|
+        doc.content_type = config[:content_type].to_s
+        doc.title        = respond_to?(:title) ? title.to_s : self.class.name
+      end
+    end
+
+    # Reads content from the model via content_extractor or content_field,
+    # validates it is a String, then syncs to the shadow document's content column.
+    def _sync_docsmith_content!
+      config = self.class.docsmith_resolved_config
+
+      raw = if config[:content_extractor]
+              config[:content_extractor].call(self)
+            else
+              public_send(config[:content_field])
+            end
+
+      unless raw.nil? || raw.is_a?(String)
+        source = config[:content_extractor] ? "content_extractor" : "content_field :#{config[:content_field]}"
+        raise Docsmith::InvalidContentField,
+          "#{source} must return a String, got #{raw.class}. " \
+          "Use content_extractor: ->(record) { ... } for non-string fields."
+      end
+
+      _docsmith_document.update_column(:content, raw.to_s)
+    end
+
+    def _docsmith_auto_save_callback
+      auto_save_version!
+    rescue Docsmith::InvalidContentField
+      nil
+    end
+  end
+end
