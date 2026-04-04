@@ -141,4 +141,43 @@ RSpec.describe Docsmith::Versionable do
       expect { article.save! }.not_to raise_error
     end
   end
+
+  describe "query methods" do
+    let(:article) { create(:article, body: "v1 content") }
+
+    before do
+      allow(Article).to receive(:docsmith_resolved_config)
+        .and_return(Article.docsmith_resolved_config.merge(auto_save: false))
+      article.save_version!(author: nil)
+      article.update_column(:body, "v2 content")
+      article.instance_variable_set(:@_docsmith_document, nil)
+      article.send(:_sync_docsmith_content!)
+      article.send(:_docsmith_document).update_column(:content, "v2 content")
+      article.save_version!(author: nil)
+    end
+
+    describe "#versions" do
+      it "returns an AR relation of DocumentVersions ordered by version_number" do
+        expect(article.versions.count).to eq(2)
+        expect(article.versions.first.version_number).to eq(1)
+        expect(article.versions.last.version_number).to eq(2)
+      end
+    end
+
+    describe "#current_version" do
+      it "returns the latest DocumentVersion" do
+        expect(article.current_version.version_number).to eq(2)
+      end
+    end
+
+    describe "#version(n)" do
+      it "returns the DocumentVersion with that version_number" do
+        expect(article.version(1).content).to eq("v1 content")
+      end
+
+      it "returns nil for unknown version number" do
+        expect(article.version(99)).to be_nil
+      end
+    end
+  end
 end

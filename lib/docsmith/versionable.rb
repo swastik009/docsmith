@@ -66,6 +66,22 @@ module Docsmith
       Docsmith::AutoSave.call(_docsmith_document, author: author, config: config)
     end
 
+    # @return [ActiveRecord::Relation<Docsmith::DocumentVersion>] ordered by version_number
+    def versions
+      _docsmith_document.document_versions
+    end
+
+    # @return [Docsmith::DocumentVersion, nil] latest version
+    def current_version
+      _docsmith_document.current_version
+    end
+
+    # @param number [Integer] 1-indexed version_number
+    # @return [Docsmith::DocumentVersion, nil]
+    def version(number)
+      _docsmith_document.document_versions.find_by(version_number: number)
+    end
+
     private
 
     # Finds or creates the shadow Docsmith::Document for this record.
