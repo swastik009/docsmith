@@ -1,0 +1,19 @@
+# frozen_string_literal: true
+
+Docsmith.configure do |config|
+  # Resolution order: per-class docsmith_config > this global config > gem defaults
+  #
+  # config.default_content_field    = :body          # gem default: :body
+  # config.default_content_type     = :markdown      # gem default: :markdown (:html, :markdown, :json)
+  # config.auto_save                = true           # gem default: true
+  # config.default_debounce         = 30             # gem default: 30 (integer seconds)
+  # config.max_versions             = nil            # gem default: nil (unlimited)
+  # config.content_extractor        = nil            # example: ->(record) { record.body.to_html }
+  # config.table_prefix             = "docsmith"     # gem default: "docsmith"
+  # config.diff_context_lines       = 3              # used in Phase 2
+  #
+  # Event hooks (fires synchronously before AS::Notifications):
+  # config.on(:version_created)  { |event| Rails.logger.info "v#{event.version.version_number} saved" }
+  # config.on(:version_restored) { |event| }
+  # config.on(:version_tagged)   { |event| }
+end

@@ -1,0 +1,44 @@
+# frozen_string_literal: true
+
+class CreateDocsmithTables < ActiveRecord::Migration[<%= ActiveRecord::Migration.current_version %>]
+  def change
+    create_table :docsmith_documents do |t|
+      t.string   :title
+      t.text     :content
+      t.string   :content_type,       null: false, default: "markdown"
+      t.integer  :versions_count,     null: false, default: 0
+      t.datetime :last_versioned_at
+      t.string   :subject_type
+      t.bigint   :subject_id
+      t.jsonb    :metadata,           null: false, default: {}
+      t.timestamps
+    end
+    add_index :docsmith_documents, %i[subject_type subject_id]
+
+    create_table :docsmith_versions do |t|
+      t.references :document,       null: false, foreign_key: { to_table: :docsmith_documents }
+      t.integer    :version_number, null: false
+      t.text       :content,        null: false
+      t.string     :content_type,   null: false
+      t.string     :author_type
+      t.bigint     :author_id
+      t.string     :change_summary
+      t.jsonb      :metadata,       null: false, default: {}
+      t.datetime   :created_at,     null: false
+    end
+    add_index :docsmith_versions, %i[document_id version_number], unique: true
+    add_index :docsmith_versions, %i[author_type author_id]
+
+    create_table :docsmith_version_tags do |t|
+      t.references :document,   null: false, foreign_key: { to_table: :docsmith_documents }
+      t.bigint     :version_id, null: false
+      t.string     :name,       null: false
+      t.string     :author_type
+      t.bigint     :author_id
+      t.datetime   :created_at, null: false
+    end
+    add_index :docsmith_version_tags, %i[document_id name], unique: true
+    add_index :docsmith_version_tags, [:version_id]
+    add_foreign_key :docsmith_version_tags, :docsmith_versions, column: :version_id
+  end
+end
