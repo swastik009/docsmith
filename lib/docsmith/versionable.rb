@@ -34,6 +34,24 @@ module Docsmith
       end
     end
 
+    # Create a new DocumentVersion snapshot of this record's content.
+    # Returns nil if content is identical to the latest version.
+    # Raises Docsmith::InvalidContentField if content_field returns a non-String
+    # and no content_extractor is configured.
+    #
+    # @param author [Object, nil]
+    # @param summary [String, nil]
+    # @return [Docsmith::DocumentVersion, nil]
+    def save_version!(author:, summary: nil)
+      _sync_docsmith_content!
+      Docsmith::VersionManager.save!(
+        _docsmith_document,
+        author:  author,
+        summary: summary,
+        config:  self.class.docsmith_resolved_config
+      )
+    end
+
     private
 
     # Finds or creates the shadow Docsmith::Document for this record.
@@ -44,6 +62,27 @@ module Docsmith
         doc.content_type = config[:content_type].to_s
         doc.title        = respond_to?(:title) ? title.to_s : self.class.name
       end
+    end
+
+    # Reads content from the model via content_extractor or content_field,
+    # validates it is a String, then syncs to the shadow document's content column.
+    def _sync_docsmith_content!
+      config = self.class.docsmith_resolved_config
+
+      raw = if config[:content_extractor]
+              config[:content_extractor].call(self)
+            else
+              public_send(config[:content_field])
+            end
+
+      unless raw.nil? || raw.is_a?(String)
+        source = config[:content_extractor] ? "content_extractor" : "content_field :#{config[:content_field]}"
+        raise Docsmith::InvalidContentField,
+          "#{source} must return a String, got #{raw.class}. " \
+          "Use content_extractor: ->(record) { ... } for non-string fields."
+      end
+
+      _docsmith_document.update_column(:content, raw.to_s)
     end
 
     # Placeholder — implemented in Task 1.17

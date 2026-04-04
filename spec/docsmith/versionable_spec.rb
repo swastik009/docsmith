@@ -47,4 +47,49 @@ RSpec.describe Docsmith::Versionable do
       expect(doc.content_type).to eq("markdown")
     end
   end
+
+  describe "#save_version!" do
+    let(:article) { create(:article, body: "# Hello") }
+
+    it "creates a DocumentVersion" do
+      expect { article.save_version!(author: nil) }
+        .to change { Docsmith::DocumentVersion.count }.by(1)
+    end
+
+    it "returns the new DocumentVersion" do
+      version = article.save_version!(author: nil)
+      expect(version).to be_a(Docsmith::DocumentVersion)
+    end
+
+    it "snapshots the content_field value" do
+      version = article.save_version!(author: nil)
+      expect(version.content).to eq("# Hello")
+    end
+
+    it "returns nil when content has not changed since last version" do
+      article.save_version!(author: nil)
+      expect(article.save_version!(author: nil)).to be_nil
+    end
+
+    it "raises InvalidContentField when content_field returns non-String" do
+      allow(article).to receive(:body).and_return(42)
+      expect { article.save_version!(author: nil) }
+        .to raise_error(Docsmith::InvalidContentField, /content_field :body/)
+    end
+
+    it "uses content_extractor when configured" do
+      klass = Class.new(ActiveRecord::Base) do
+        self.table_name = "articles"
+        include Docsmith::Versionable
+        docsmith_config do
+          content_field     :body
+          content_type      :html
+          content_extractor ->(r) { "extracted: #{r.body}" }
+        end
+      end
+      article2 = klass.create!(body: "raw")
+      version = article2.save_version!(author: nil)
+      expect(version.content).to eq("extracted: raw")
+    end
+  end
 end
