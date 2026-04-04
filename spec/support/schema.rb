@@ -1,9 +1,10 @@
 # frozen_string_literal: true
 
 # In-memory SQLite schema for tests.
-# Must mirror db/migrate/create_docsmith_tables.rb exactly.
-# SQLite does not support :jsonb — use :text for metadata columns.
-# Production migration uses :jsonb for PostgreSQL.
+# Mirrors db/migrate/create_docsmith_tables.rb with two intentional differences:
+#   1. :jsonb columns use :text here (SQLite has no jsonb type)
+#   2. Foreign key constraints are omitted (SQLite does not enforce them)
+# Production migration uses :jsonb and add_foreign_key for PostgreSQL.
 
 ActiveRecord::Schema.define do
   create_table :docsmith_documents, force: true do |t|
@@ -42,7 +43,7 @@ ActiveRecord::Schema.define do
     t.datetime :created_at,    null: false
   end
   add_index :docsmith_version_tags, %i[document_id name], unique: true
-  add_index :docsmith_version_tags, [:version_id]
+  add_index :docsmith_version_tags, %i[version_id]
 
   create_table :articles, force: true do |t|
     t.string :title
