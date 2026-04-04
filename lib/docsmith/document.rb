@@ -28,8 +28,6 @@ module Docsmith
     # @return [Docsmith::DocumentVersion, nil] latest version by version_number
     def current_version
       document_versions.last
-    rescue NameError
-      nil
     end
 
     # Find or create the shadow Document for an existing AR record.
