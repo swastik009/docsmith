@@ -49,6 +49,11 @@ RSpec.describe Docsmith::Versionable do
   end
 
   describe "#save_version!" do
+    before(:each) do
+      allow(Article).to receive(:docsmith_resolved_config)
+        .and_return(Article.docsmith_resolved_config.merge(auto_save: false))
+    end
+
     let(:article) { create(:article, body: "# Hello") }
 
     it "creates a DocumentVersion" do
@@ -85,11 +90,55 @@ RSpec.describe Docsmith::Versionable do
           content_field     :body
           content_type      :html
           content_extractor ->(r) { "extracted: #{r.body}" }
+          auto_save          false
         end
       end
       article2 = klass.create!(body: "raw")
       version = article2.save_version!(author: nil)
       expect(version.content).to eq("extracted: raw")
+    end
+  end
+
+  describe "#auto_save_version!" do
+    let(:article) { create(:article, body: "# Auto") }
+
+    it "creates a version outside debounce window" do
+      expect { article.auto_save_version!(author: nil) }
+        .to change { Docsmith::DocumentVersion.count }.by(1)
+    end
+
+    it "returns nil within debounce window" do
+      article.auto_save_version!(author: nil)
+      result = article.auto_save_version!(author: nil)
+      expect(result).to be_nil
+    end
+
+    it "returns nil when content is unchanged" do
+      article.auto_save_version!(author: nil)
+      doc = article.send(:_docsmith_document)
+      doc.update_column(:last_versioned_at, 60.seconds.ago)
+      result = article.auto_save_version!(author: nil)
+      expect(result).to be_nil
+    end
+
+    it "returns nil when auto_save is false in config" do
+      allow(Article).to receive(:docsmith_resolved_config)
+        .and_return(Article.docsmith_resolved_config.merge(auto_save: false))
+      expect(article.auto_save_version!(author: nil)).to be_nil
+    end
+  end
+
+  describe "after_save callback" do
+    it "calls auto_save_version! after every AR save" do
+      article = build(:article, body: "callback test")
+      expect(article).to receive(:auto_save_version!)
+      article.save!
+    end
+
+    it "swallows InvalidContentField during auto-save callback" do
+      article = create(:article, body: "ok")
+      allow(article).to receive(:body).and_return(Object.new)
+      expect { article.save! }.not_to raise_error
     end
   end
 end

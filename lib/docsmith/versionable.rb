@@ -52,6 +52,20 @@ module Docsmith
       )
     end
 
+    # Debounced auto-save. Returns nil if debounce window has not elapsed
+    # OR content is unchanged. Both non-save cases return nil.
+    # auto_save: false in config causes this to always return nil.
+    #
+    # @param author [Object, nil]
+    # @return [Docsmith::DocumentVersion, nil]
+    def auto_save_version!(author: nil)
+      config = self.class.docsmith_resolved_config
+      return nil unless config[:auto_save]
+
+      _sync_docsmith_content!
+      Docsmith::AutoSave.call(_docsmith_document, author: author, config: config)
+    end
+
     private
 
     # Finds or creates the shadow Docsmith::Document for this record.
@@ -85,7 +99,11 @@ module Docsmith
       _docsmith_document.update_column(:content, raw.to_s)
     end
 
-    # Placeholder — implemented in Task 1.17
-    def _docsmith_auto_save_callback; end
+    def _docsmith_auto_save_callback
+      auto_save_version!
+    rescue Docsmith::InvalidContentField
+      # Swallow on auto-save — user must call save_version! explicitly to see the error.
+      nil
+    end
   end
 end
