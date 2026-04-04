@@ -70,5 +70,26 @@ module Docsmith
     def hooks_for(event_name)
       @hooks[event_name]
     end
+
+    # Merge per-class settings over global config over gem defaults.
+    # Resolution is at read time — global changes after class definition still apply
+    # for keys the class does not override.
+    # @param class_settings [Hash]
+    # @param global_config [Docsmith::Configuration, nil]
+    # @return [Hash] fully resolved config
+    def self.resolve(class_settings, global_config)
+      DEFAULTS.each_with_object({}) do |(key, default_val), result|
+        global_key = GLOBAL_KEY_MAP[key]
+        global_val = global_config&.public_send(global_key)
+
+        result[key] = if class_settings.key?(key)
+                        class_settings[key]
+                      elsif !global_val.nil?
+                        global_val
+                      else
+                        default_val
+                      end
+      end.tap { |r| r[:debounce] = r[:debounce].to_i }
+    end
   end
 end

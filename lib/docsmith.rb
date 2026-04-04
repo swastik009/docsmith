@@ -8,15 +8,20 @@ require_relative "docsmith/versionable"
 module Docsmith
   @configuration = nil
 
-  # @return [Configuration]
-  def self.configuration
-    @configuration ||= Configuration.new
-  end
+  class << self
+    # @yield [Docsmith::Configuration]
+    def configure
+      yield configuration
+    end
 
-  # Reset the global configuration (mainly used in tests)
-  def self.reset_configuration!
-    @configuration = nil
-  end
+    # @return [Configuration]
+    def configuration
+      @configuration ||= Configuration.new
+    end
 
-  # Your code goes here...
+    # Reset to defaults. Called in specs via config.before(:each).
+    def reset_configuration!
+      @configuration = Configuration.new
+    end
+  end
 end
