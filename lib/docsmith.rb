@@ -4,6 +4,7 @@ require_relative "docsmith/version"
 require_relative "docsmith/errors"
 require_relative "docsmith/configuration"
 require_relative "docsmith/versionable"
+require_relative "docsmith/events/event"
 
 module Docsmith
   @configuration = nil
