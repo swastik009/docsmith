@@ -82,6 +82,52 @@ module Docsmith
       _docsmith_document.document_versions.find_by(version_number: number)
     end
 
+    # Restore to a previous version. Creates a new version with the old content.
+    # Syncs restored content back to the model's content_field via update_column
+    # (bypasses after_save to prevent a duplicate auto-save).
+    # Never mutates existing versions.
+    #
+    # @param number [Integer] version_number to restore from
+    # @param author [Object, nil]
+    # @return [Docsmith::DocumentVersion]
+    # @raise [Docsmith::VersionNotFound]
+    def restore_version!(number, author:)
+      result = Docsmith::VersionManager.restore!(
+        _docsmith_document,
+        version: number,
+        author:  author,
+        config:  self.class.docsmith_resolved_config
+      )
+      field = self.class.docsmith_resolved_config[:content_field]
+      update_column(field, _docsmith_document.reload.content)
+      result
+    end
+
+    # Tag a specific version. Names are unique per document.
+    # @param number [Integer] version_number to tag
+    # @param name [String]
+    # @param author [Object, nil]
+    # @return [Docsmith::VersionTag]
+    def tag_version!(number, name:, author:)
+      Docsmith::VersionManager.tag!(
+        _docsmith_document, version: number, name: name, author: author)
+    end
+
+    # @param tag_name [String]
+    # @return [Docsmith::DocumentVersion, nil]
+    def tagged_version(tag_name)
+      tag = _docsmith_document.version_tags.find_by(name: tag_name)
+      tag&.version
+    end
+
+    # @param number [Integer] version_number
+    # @return [Array<String>] tag names on that version
+    def version_tags(number)
+      ver = version(number)
+      return [] unless ver
+      ver.version_tags.pluck(:name)
+    end
+
     private
 
     # Finds or creates the shadow Docsmith::Document for this record.

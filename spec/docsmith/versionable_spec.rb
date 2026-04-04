@@ -180,4 +180,79 @@ RSpec.describe Docsmith::Versionable do
       end
     end
   end
+
+  describe "#restore_version!" do
+    let(:article) { create(:article, body: "original") }
+
+    before do
+      allow(Article).to receive(:docsmith_resolved_config)
+        .and_return(Article.docsmith_resolved_config.merge(auto_save: false))
+      article.save_version!(author: nil)
+      article.update_columns(body: "edited")
+      article.instance_variable_set(:@_docsmith_document, nil)
+      article.send(:_docsmith_document).update_column(:content, "edited")
+      article.save_version!(author: nil)
+    end
+
+    it "creates a new version with the old content" do
+      new_ver = article.restore_version!(1, author: nil)
+      expect(new_ver.content).to eq("original")
+      expect(new_ver.version_number).to eq(3)
+    end
+
+    it "syncs restored content back to the model's body column" do
+      article.restore_version!(1, author: nil)
+      expect(article.reload.body).to eq("original")
+    end
+
+    it "raises VersionNotFound for unknown version" do
+      expect { article.restore_version!(99, author: nil) }
+        .to raise_error(Docsmith::VersionNotFound)
+    end
+  end
+
+  describe "tag methods" do
+    let(:article) { create(:article, body: "v1") }
+    before do
+      allow(Article).to receive(:docsmith_resolved_config)
+        .and_return(Article.docsmith_resolved_config.merge(auto_save: false))
+      article.save_version!(author: nil)
+    end
+
+    describe "#tag_version!" do
+      it "creates a VersionTag" do
+        expect { article.tag_version!(1, name: "v1.0", author: nil) }
+          .to change { Docsmith::VersionTag.count }.by(1)
+      end
+
+      it "raises TagAlreadyExists on duplicate name" do
+        article.tag_version!(1, name: "v1.0", author: nil)
+        expect { article.tag_version!(1, name: "v1.0", author: nil) }
+          .to raise_error(Docsmith::TagAlreadyExists)
+      end
+    end
+
+    describe "#tagged_version" do
+      it "returns the DocumentVersion for a given tag" do
+        article.tag_version!(1, name: "release", author: nil)
+        expect(article.tagged_version("release").version_number).to eq(1)
+      end
+
+      it "returns nil for unknown tag" do
+        expect(article.tagged_version("nope")).to be_nil
+      end
+    end
+
+    describe "#version_tags" do
+      it "returns array of tag names for a version" do
+        article.tag_version!(1, name: "v1.0", author: nil)
+        article.tag_version!(1, name: "stable", author: nil)
+        expect(article.version_tags(1)).to contain_exactly("v1.0", "stable")
+      end
+
+      it "returns empty array for untagged version" do
+        expect(article.version_tags(1)).to eq([])
+      end
+    end
+  end
 end
