@@ -11,6 +11,7 @@ module Docsmith
                class_name:  "Docsmith::Document",
                foreign_key: :document_id
     belongs_to :author, polymorphic: true, optional: true
+    belongs_to :branch, class_name: "Docsmith::Branches::Branch", optional: true
     has_many   :version_tags,
                class_name:  "Docsmith::VersionTag",
                foreign_key: :version_id,

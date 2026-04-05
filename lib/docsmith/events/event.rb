@@ -12,7 +12,7 @@ module Docsmith
     Event = Struct.new(
       :record, :document, :version, :author,
       :from_version, :tag_name,
-      :comment, :branch, :conflicts,
+      :comment, :branch, :conflicts, :merge_result,
       keyword_init: true
     )
   end
