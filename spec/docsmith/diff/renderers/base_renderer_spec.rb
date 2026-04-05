@@ -55,3 +55,33 @@ RSpec.describe Docsmith::Diff::Renderers::Base do
     end
   end
 end
+
+RSpec.describe Docsmith::Diff::Renderers::Registry do
+  after { described_class.reset! }
+
+  describe ".for" do
+    it "returns Base for unregistered content types" do
+      expect(described_class.for("markdown")).to eq(Docsmith::Diff::Renderers::Base)
+    end
+
+    it "returns the registered renderer for a registered type" do
+      custom = Class.new(Docsmith::Diff::Renderers::Base)
+      described_class.register("html", custom)
+      expect(described_class.for("html")).to eq(custom)
+    end
+
+    it "accepts symbol content types" do
+      custom = Class.new(Docsmith::Diff::Renderers::Base)
+      described_class.register(:json, custom)
+      expect(described_class.for("json")).to eq(custom)
+    end
+  end
+
+  describe ".register" do
+    it "adds a renderer to the registry" do
+      custom = Class.new(Docsmith::Diff::Renderers::Base)
+      described_class.register("custom", custom)
+      expect(described_class.all).to include("custom" => custom)
+    end
+  end
+end

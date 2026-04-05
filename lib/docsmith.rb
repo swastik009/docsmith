@@ -19,6 +19,8 @@ require_relative "docsmith/version_manager"
 require_relative "docsmith/versionable"
 require_relative "docsmith/diff"
 require_relative "docsmith/diff/renderers"
+require_relative "docsmith/diff/renderers/base"
+require_relative "docsmith/diff/renderers/registry"
 
 module Docsmith
   class << self
