@@ -21,6 +21,7 @@ require_relative "docsmith/diff"
 require_relative "docsmith/diff/renderers"
 require_relative "docsmith/diff/renderers/base"
 require_relative "docsmith/diff/renderers/registry"
+require_relative "docsmith/diff/result"
 
 module Docsmith
   class << self
