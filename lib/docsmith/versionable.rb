@@ -41,13 +41,15 @@ module Docsmith
     #
     # @param author [Object, nil]
     # @param summary [String, nil]
+    # @param branch [Docsmith::Branches::Branch, nil]
     # @return [Docsmith::DocumentVersion, nil]
-    def save_version!(author:, summary: nil)
+    def save_version!(author:, summary: nil, branch: nil)
       _sync_docsmith_content!
       Docsmith::VersionManager.save!(
         _docsmith_document,
         author:  author,
         summary: summary,
+        branch:  branch,
         config:  self.class.docsmith_resolved_config
       )
     end
@@ -209,6 +211,39 @@ module Docsmith
     # @return [void]
     def migrate_comments!(from:, to:)
       Comments::Migrator.migrate!(_docsmith_document, from: from, to: to)
+    end
+
+    # Creates a new Branch forked from a specific version of this document.
+    #
+    # @param name [String]
+    # @param from_version [Integer] version_number to fork from
+    # @param author [Object]
+    # @return [Docsmith::Branches::Branch]
+    def create_branch!(name:, from_version:, author:)
+      Branches::Manager.create!(_docsmith_document, name: name, from_version: from_version, author: author)
+    end
+
+    # Returns all branches for this document.
+    #
+    # @return [ActiveRecord::Relation<Docsmith::Branches::Branch>]
+    def branches
+      Branches::Branch.where(document: _docsmith_document)
+    end
+
+    # Returns only active branches for this document.
+    #
+    # @return [ActiveRecord::Relation<Docsmith::Branches::Branch>]
+    def active_branches
+      branches.active
+    end
+
+    # Merges a branch into the main document history.
+    #
+    # @param branch [Docsmith::Branches::Branch]
+    # @param author [Object]
+    # @return [Docsmith::MergeResult]
+    def merge_branch!(branch, author:)
+      Branches::Manager.merge!(_docsmith_document, branch: branch, author: author)
     end
 
     private

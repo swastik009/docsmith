@@ -431,4 +431,102 @@ RSpec.describe Docsmith::Versionable do
       expect(article.comments_on(version: 2).first.body).to eq("note")
     end
   end
+
+  describe "#save_version! with branch:" do
+    include FactoryBot::Syntax::Methods
+
+    let(:article) { create(:article, body: "initial") }
+    let(:user)    { create(:user) }
+
+    before do
+      allow(Article).to receive(:docsmith_resolved_config).and_return(
+        { content_field: :body, content_type: :markdown, auto_save: false, debounce: 30, max_versions: nil, content_extractor: nil }
+      )
+      article.save_version!(author: user)
+    end
+
+    it "creates a version with branch_id set" do
+      branch = article.create_branch!(name: "feature", from_version: 1, author: user)
+      article.body = "branch content"
+      article.save!
+      version = article.save_version!(author: user, branch: branch)
+      expect(version.branch_id).to eq(branch.id)
+    end
+  end
+
+  describe "#create_branch!" do
+    include FactoryBot::Syntax::Methods
+
+    let(:article) { create(:article, body: "initial content") }
+    let(:user)    { create(:user) }
+
+    before do
+      allow(Article).to receive(:docsmith_resolved_config).and_return(
+        { content_field: :body, content_type: :markdown, auto_save: false, debounce: 30, max_versions: nil, content_extractor: nil }
+      )
+      article.save_version!(author: user)
+    end
+
+    it "creates a Branch from the given version" do
+      branch = article.create_branch!(name: "feature", from_version: 1, author: user)
+      expect(branch).to be_a(Docsmith::Branches::Branch)
+      expect(branch.name).to eq("feature")
+      expect(branch.status).to eq("active")
+    end
+  end
+
+  describe "#branches and #active_branches" do
+    include FactoryBot::Syntax::Methods
+
+    let(:article) { create(:article, body: "content") }
+    let(:user)    { create(:user) }
+
+    before do
+      allow(Article).to receive(:docsmith_resolved_config).and_return(
+        { content_field: :body, content_type: :markdown, auto_save: false, debounce: 30, max_versions: nil, content_extractor: nil }
+      )
+      article.save_version!(author: user)
+      article.create_branch!(name: "feature", from_version: 1, author: user)
+      article.create_branch!(name: "hotfix",  from_version: 1, author: user)
+    end
+
+    it "#branches returns all branches" do
+      expect(article.branches.count).to eq(2)
+    end
+
+    it "#active_branches returns only active branches" do
+      expect(article.active_branches.count).to eq(2)
+    end
+  end
+
+  describe "#merge_branch!" do
+    include FactoryBot::Syntax::Methods
+
+    let(:article) { create(:article, body: "line one\nline two\nline three") }
+    let(:user)    { create(:user) }
+    let(:branch) do
+      allow(Article).to receive(:docsmith_resolved_config).and_return(
+        { content_field: :body, content_type: :markdown, auto_save: false, debounce: 30, max_versions: nil, content_extractor: nil }
+      )
+      article.save_version!(author: user)
+      article.create_branch!(name: "feature", from_version: 1, author: user)
+    end
+
+    before do
+      article.body = "line one\nline two\nline three\nline four"
+      article.save!
+      article.save_version!(author: user, branch: branch)
+    end
+
+    it "returns a MergeResult" do
+      result = article.merge_branch!(branch, author: user)
+      expect(result).to be_a(Docsmith::MergeResult)
+    end
+
+    it "fast-forward merges successfully and new version has branch content" do
+      result = article.merge_branch!(branch, author: user)
+      expect(result.success?).to be(true)
+      expect(result.merged_version.content).to include("line four")
+    end
+  end
 end
