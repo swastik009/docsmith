@@ -28,5 +28,19 @@ module Docsmith
               .where("version_number < ?", version_number)
               .last
     end
+
+    # Renders this version's content in the given output format.
+    #
+    # @param format [Symbol] :html or :json
+    # @param options [Hash] passed through to the renderer
+    # @return [String]
+    # @raise [ArgumentError] for unknown formats
+    def render(format, **options)
+      case format.to_sym
+      when :html then Rendering::HtmlRenderer.new.render(self, **options)
+      when :json then Rendering::JsonRenderer.new.render(self, **options)
+      else raise ArgumentError, "Unknown render format: #{format}. Supported: :html, :json"
+      end
+    end
   end
 end

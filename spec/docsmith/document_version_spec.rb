@@ -1,5 +1,7 @@
 # frozen_string_literal: true
 
+require "json"
+
 RSpec.describe Docsmith::DocumentVersion do
   let(:doc)  { create(:docsmith_document) }
   let(:user) { create(:user) }
@@ -50,6 +52,28 @@ RSpec.describe Docsmith::DocumentVersion do
       v2 = described_class.create!(document: doc, version_number: 2, content: "v2",
                                    content_type: "markdown", created_at: Time.current)
       expect(v2.previous_version).to eq(v1)
+    end
+  end
+
+  describe "#render" do
+    include FactoryBot::Syntax::Methods
+
+    let(:doc)     { create(:document, content: "# Hello", content_type: "markdown") }
+    let(:version) { create(:document_version, document: doc, content: "# Hello", content_type: "markdown", version_number: 1) }
+
+    it "renders :html format" do
+      html = version.render(:html)
+      expect(html).to include("docsmith-markdown")
+      expect(html).to include("# Hello")
+    end
+
+    it "renders :json format and wraps in envelope" do
+      parsed = JSON.parse(version.render(:json))
+      expect(parsed["content"]).to eq("# Hello")
+    end
+
+    it "raises ArgumentError for unknown format" do
+      expect { version.render(:pdf) }.to raise_error(ArgumentError, /pdf/)
     end
   end
 end
