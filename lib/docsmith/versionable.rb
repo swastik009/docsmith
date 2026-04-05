@@ -154,6 +154,63 @@ module Docsmith
       Docsmith::Diff.between(v_from, v_to)
     end
 
+    # Adds a comment to a specific version of this document.
+    #
+    # @param version [Integer] version_number
+    # @param body [String]
+    # @param author [Object] polymorphic author
+    # @param anchor [Hash, nil] { start_offset:, end_offset: } for inline range comments
+    # @param parent [Comments::Comment, nil] parent comment for threading
+    # @return [Docsmith::Comments::Comment]
+    def add_comment!(version:, body:, author:, anchor: nil, parent: nil)
+      Comments::Manager.add!(
+        _docsmith_document,
+        version_number: version,
+        body:           body,
+        author:         author,
+        anchor:         anchor,
+        parent:         parent
+      )
+    end
+
+    # Returns all comments across all versions of this document.
+    #
+    # @return [ActiveRecord::Relation<Docsmith::Comments::Comment>]
+    def comments
+      doc = _docsmith_document
+      Comments::Comment.joins(:version)
+                       .where(docsmith_versions: { document_id: doc.id })
+    end
+
+    # Returns comments on a specific version, optionally filtered by anchor type.
+    #
+    # @param version [Integer] version_number
+    # @param type [Symbol, nil] :document or :range to filter; nil = all
+    # @return [ActiveRecord::Relation<Docsmith::Comments::Comment>]
+    def comments_on(version:, type: nil)
+      doc = _docsmith_document
+      dv  = Docsmith::DocumentVersion.find_by!(document: doc, version_number: version)
+      rel = Comments::Comment.where(version: dv)
+      rel = rel.where(anchor_type: type.to_s) if type
+      rel
+    end
+
+    # Returns all unresolved comments across all versions.
+    #
+    # @return [ActiveRecord::Relation<Docsmith::Comments::Comment>]
+    def unresolved_comments
+      comments.merge(Comments::Comment.unresolved)
+    end
+
+    # Migrates top-level comments from one version to another.
+    #
+    # @param from [Integer] source version_number
+    # @param to [Integer] target version_number
+    # @return [void]
+    def migrate_comments!(from:, to:)
+      Comments::Migrator.migrate!(_docsmith_document, from: from, to: to)
+    end
+
     private
 
     # Finds or creates the shadow Docsmith::Document for this record.

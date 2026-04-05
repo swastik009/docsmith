@@ -313,4 +313,122 @@ RSpec.describe Docsmith::Versionable do
       expect(result.to_version).to eq(3)
     end
   end
+
+  describe "#add_comment!" do
+    include FactoryBot::Syntax::Methods
+
+    let(:article) { create(:article, body: "hello world content here") }
+    let(:user)    { create(:user) }
+
+    before do
+      allow(Article).to receive(:docsmith_resolved_config).and_return(
+        { content_field: :body, content_type: :markdown, auto_save: false, debounce: 30, max_versions: nil, content_extractor: nil }
+      )
+      article.save_version!(author: user)
+    end
+
+    it "creates a document-level comment on the specified version" do
+      comment = article.add_comment!(version: 1, body: "Great", author: user)
+      expect(comment).to be_a(Docsmith::Comments::Comment)
+      expect(comment.anchor_type).to eq("document")
+    end
+
+    it "creates a range-anchored inline comment when anchor is given" do
+      comment = article.add_comment!(
+        version: 1, body: "cite", author: user,
+        anchor: { start_offset: 0, end_offset: 5 }
+      )
+      expect(comment.anchor_type).to eq("range")
+    end
+  end
+
+  describe "#comments" do
+    include FactoryBot::Syntax::Methods
+
+    let(:article) { create(:article, body: "content") }
+    let(:user)    { create(:user) }
+
+    before do
+      allow(Article).to receive(:docsmith_resolved_config).and_return(
+        { content_field: :body, content_type: :markdown, auto_save: false, debounce: 30, max_versions: nil, content_extractor: nil }
+      )
+      article.save_version!(author: user)
+      article.add_comment!(version: 1, body: "first",  author: user)
+      article.add_comment!(version: 1, body: "second", author: user)
+    end
+
+    it "returns all comments across all versions as an AR relation" do
+      expect(article.comments.count).to eq(2)
+    end
+  end
+
+  describe "#comments_on" do
+    include FactoryBot::Syntax::Methods
+
+    let(:article) { create(:article, body: "content") }
+    let(:user)    { create(:user) }
+
+    before do
+      allow(Article).to receive(:docsmith_resolved_config).and_return(
+        { content_field: :body, content_type: :markdown, auto_save: false, debounce: 30, max_versions: nil, content_extractor: nil }
+      )
+      article.save_version!(author: user)
+      article.body = "updated"
+      article.save!
+      article.save_version!(author: user)
+      article.add_comment!(version: 1, body: "on v1", author: user)
+      article.add_comment!(version: 2, body: "on v2", author: user)
+    end
+
+    it "returns only comments on the specified version" do
+      expect(article.comments_on(version: 1).map(&:body)).to eq(["on v1"])
+      expect(article.comments_on(version: 2).map(&:body)).to eq(["on v2"])
+    end
+  end
+
+  describe "#unresolved_comments" do
+    include FactoryBot::Syntax::Methods
+
+    let(:article) { create(:article, body: "content") }
+    let(:user)    { create(:user) }
+
+    before do
+      allow(Article).to receive(:docsmith_resolved_config).and_return(
+        { content_field: :body, content_type: :markdown, auto_save: false, debounce: 30, max_versions: nil, content_extractor: nil }
+      )
+      article.save_version!(author: user)
+      article.add_comment!(version: 1, body: "unresolved", author: user)
+      c2 = article.add_comment!(version: 1, body: "resolved",   author: user)
+      Docsmith::Comments::Manager.resolve!(c2, by: user)
+    end
+
+    it "returns only unresolved comments" do
+      expect(article.unresolved_comments.count).to eq(1)
+      expect(article.unresolved_comments.first.body).to eq("unresolved")
+    end
+  end
+
+  describe "#migrate_comments!" do
+    include FactoryBot::Syntax::Methods
+
+    let(:article) { create(:article, body: "hello world") }
+    let(:user)    { create(:user) }
+
+    before do
+      allow(Article).to receive(:docsmith_resolved_config).and_return(
+        { content_field: :body, content_type: :markdown, auto_save: false, debounce: 30, max_versions: nil, content_extractor: nil }
+      )
+      article.save_version!(author: user)
+      article.add_comment!(version: 1, body: "note", author: user)
+      article.body = "hello world updated"
+      article.save!
+      article.save_version!(author: user)
+    end
+
+    it "copies comments from one version to another" do
+      article.migrate_comments!(from: 1, to: 2)
+      expect(article.comments_on(version: 2).count).to eq(1)
+      expect(article.comments_on(version: 2).first.body).to eq("note")
+    end
+  end
 end
