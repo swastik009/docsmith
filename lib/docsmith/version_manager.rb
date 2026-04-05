@@ -11,9 +11,10 @@ module Docsmith
     # @param document [Docsmith::Document]
     # @param author [Object, nil]
     # @param summary [String, nil]
+    # @param branch [Docsmith::Branches::Branch, nil]
     # @param config [Hash] resolved config
     # @return [Docsmith::DocumentVersion, nil]
-    def self.save!(document, author:, summary: nil, config: nil)
+    def self.save!(document, author:, summary: nil, branch: nil, config: nil)
       config  ||= Configuration.resolve({}, Docsmith.configuration)
       current   = document.content.to_s
       latest    = document.document_versions.last
@@ -29,6 +30,7 @@ module Docsmith
         content_type:   document.content_type,
         author:         author,
         change_summary: summary,
+        branch_id:      branch&.id,
         metadata:       {}
       )
 
@@ -37,6 +39,7 @@ module Docsmith
         last_versioned_at: Time.current
       )
       document.versions_count = next_num
+      branch&.update_columns(head_version_id: version.id)
 
       prune_if_needed!(document, version, config) if config[:max_versions]
 

@@ -150,4 +150,45 @@ RSpec.describe Docsmith::VersionManager do
         .to raise_error(Docsmith::VersionNotFound)
     end
   end
+
+  describe ".save! with branch:" do
+    include FactoryBot::Syntax::Methods
+
+    let(:user)   { create(:user) }
+    let(:doc)    { create(:docsmith_document, content: "initial") }
+
+    let(:branch) do
+      # Reset doc to initial content, save v1, then branch is created from that
+      doc.update_column(:content, "initial")
+      v1 = Docsmith::VersionManager.save!(doc, author: user, config: config)
+      Docsmith::Branches::Branch.create!(
+        document:       doc,
+        name:           "feature",
+        source_version: v1,
+        author:         user,
+        status:         "active"
+      )
+    end
+
+    it "sets branch_id on the created DocumentVersion" do
+      b = branch  # Trigger let evaluation first
+      doc.update_column(:content, "branch content")
+      version = Docsmith::VersionManager.save!(doc, author: user, branch: b, config: config)
+      expect(version.branch_id).to eq(b.id)
+    end
+
+    it "updates branch head_version_id to the new version" do
+      b = branch  # Trigger let evaluation first
+      doc.update_column(:content, "branch content")
+      version = Docsmith::VersionManager.save!(doc, author: user, branch: b, config: config)
+      expect(b.reload.head_version_id).to eq(version.id)
+    end
+
+    it "returns nil when content is unchanged" do
+      b = branch  # Trigger let evaluation first
+      # branch content same as latest version (initial)
+      result = Docsmith::VersionManager.save!(doc, author: user, branch: b, config: config)
+      expect(result).to be_nil
+    end
+  end
 end
