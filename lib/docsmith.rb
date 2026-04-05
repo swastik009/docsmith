@@ -23,6 +23,8 @@ require_relative "docsmith/diff/renderers/base"
 require_relative "docsmith/diff/renderers/registry"
 require_relative "docsmith/diff/result"
 require_relative "docsmith/diff/engine"
+require_relative "docsmith/rendering/html_renderer"
+require_relative "docsmith/rendering/json_renderer"
 
 module Docsmith
   class << self
