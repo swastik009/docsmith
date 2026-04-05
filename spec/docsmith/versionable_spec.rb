@@ -255,4 +255,62 @@ RSpec.describe Docsmith::Versionable do
       end
     end
   end
+
+  describe "#diff_from" do
+    include FactoryBot::Syntax::Methods
+
+    let(:article) { create(:article, body: "line one\nline two") }
+    let(:user)    { create(:user) }
+
+    before do
+      allow(Article).to receive(:docsmith_resolved_config)
+        .and_return(Article.docsmith_resolved_config.merge(auto_save: false))
+      article.save_version!(author: user)
+      # Update article and document
+      doc = article.send(:_docsmith_document)
+      article.update_columns(body: "line one\nline two\nline three")
+      doc.update_column(:content, "line one\nline two\nline three")
+      # Use VersionManager directly to avoid caching issues
+      Docsmith::VersionManager.save!(doc, author: user, config: Article.docsmith_resolved_config)
+    end
+
+    it "returns a Diff::Result comparing version N to current" do
+      result = article.diff_from(1)
+      expect(result).to be_a(Docsmith::Diff::Result)
+      expect(result.from_version).to eq(1)
+      expect(result.additions).to eq(1)
+    end
+
+    it "raises ActiveRecord::RecordNotFound for a non-existent version" do
+      expect { article.diff_from(99) }.to raise_error(ActiveRecord::RecordNotFound)
+    end
+  end
+
+  describe "#diff_between" do
+    include FactoryBot::Syntax::Methods
+
+    let(:article) { create(:article, body: "v1 content") }
+    let(:user)    { create(:user) }
+
+    before do
+      allow(Article).to receive(:docsmith_resolved_config)
+        .and_return(Article.docsmith_resolved_config.merge(auto_save: false))
+      article.save_version!(author: user)
+      article.update_columns(body: "v2 content")
+      article.instance_variable_set(:@_docsmith_document, nil)
+      article.send(:_docsmith_document).update_column(:content, "v2 content")
+      article.save_version!(author: user)
+      article.update_columns(body: "v3 content")
+      article.instance_variable_set(:@_docsmith_document, nil)
+      article.send(:_docsmith_document).update_column(:content, "v3 content")
+      article.save_version!(author: user)
+    end
+
+    it "returns a Diff::Result comparing two named versions" do
+      result = article.diff_between(1, 3)
+      expect(result).to be_a(Docsmith::Diff::Result)
+      expect(result.from_version).to eq(1)
+      expect(result.to_version).to eq(3)
+    end
+  end
 end

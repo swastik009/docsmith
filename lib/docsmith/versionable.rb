@@ -128,6 +128,32 @@ module Docsmith
       ver.version_tags.pluck(:name)
     end
 
+    # Computes a diff from version N to the current (latest) version.
+    #
+    # @param version_number [Integer]
+    # @return [Docsmith::Diff::Result]
+    # @raise [ActiveRecord::RecordNotFound] if version_number does not exist
+    def diff_from(version_number)
+      doc    = _docsmith_document
+      v_from = Docsmith::DocumentVersion.find_by!(document: doc, version_number: version_number)
+      # Query the latest version directly to avoid association caching issues
+      v_to   = Docsmith::DocumentVersion.where(document_id: doc.id).order(version_number: :desc).first!
+      Docsmith::Diff.between(v_from, v_to)
+    end
+
+    # Computes a diff between two named versions.
+    #
+    # @param from_version [Integer]
+    # @param to_version [Integer]
+    # @return [Docsmith::Diff::Result]
+    # @raise [ActiveRecord::RecordNotFound] if either version does not exist
+    def diff_between(from_version, to_version)
+      doc    = _docsmith_document
+      v_from = Docsmith::DocumentVersion.find_by!(document: doc, version_number: from_version)
+      v_to   = Docsmith::DocumentVersion.find_by!(document: doc, version_number: to_version)
+      Docsmith::Diff.between(v_from, v_to)
+    end
+
     private
 
     # Finds or creates the shadow Docsmith::Document for this record.
