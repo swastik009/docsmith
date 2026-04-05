@@ -40,5 +40,25 @@ class CreateDocsmithTables < ActiveRecord::Migration[<%= ActiveRecord::Migration
     add_index :docsmith_version_tags, %i[document_id name], unique: true
     add_index :docsmith_version_tags, [:version_id]
     add_foreign_key :docsmith_version_tags, :docsmith_versions, column: :version_id
+
+    create_table :docsmith_comments do |t|
+      t.bigint   :version_id,        null: false
+      t.bigint   :parent_id
+      t.string   :author_type
+      t.bigint   :author_id
+      t.text     :body,              null: false
+      t.string   :anchor_type,       null: false, default: "document"
+      t.jsonb    :anchor_data,       null: false, default: {}
+      t.boolean  :resolved,          null: false, default: false
+      t.string   :resolved_by_type
+      t.bigint   :resolved_by_id
+      t.datetime :resolved_at
+      t.timestamps                   null: false
+    end
+    add_index :docsmith_comments, :version_id
+    add_index :docsmith_comments, :parent_id
+    add_index :docsmith_comments, [:author_type, :author_id]
+    add_foreign_key :docsmith_comments, :docsmith_versions, column: :version_id
+    add_foreign_key :docsmith_comments, :docsmith_comments, column: :parent_id
   end
 end

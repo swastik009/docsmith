@@ -60,4 +60,23 @@ ActiveRecord::Schema.define do
     t.string :name
     t.timestamps
   end
+
+  create_table :docsmith_comments, force: true do |t|
+    t.bigint   :version_id,        null: false
+    t.bigint   :parent_id
+    t.string   :author_type
+    t.bigint   :author_id
+    t.text     :body,              null: false
+    t.string   :anchor_type,       null: false, default: "document"
+    t.text     :anchor_data,       null: false, default: "{}"
+    t.boolean  :resolved,          null: false, default: false
+    t.string   :resolved_by_type
+    t.bigint   :resolved_by_id
+    t.datetime :resolved_at
+    t.datetime :created_at,        null: false
+    t.datetime :updated_at,        null: false
+  end
+  add_index :docsmith_comments, :version_id
+  add_index :docsmith_comments, :parent_id
+  add_index :docsmith_comments, %i[author_type author_id]
 end

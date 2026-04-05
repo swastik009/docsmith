@@ -15,6 +15,10 @@ module Docsmith
                class_name:  "Docsmith::VersionTag",
                foreign_key: :version_id,
                dependent:   :destroy
+    has_many :comments,
+             class_name:  "Docsmith::Comments::Comment",
+             foreign_key: :version_id,
+             dependent:   :destroy
 
     validates :version_number, presence: true,
               uniqueness: { scope: :document_id }
