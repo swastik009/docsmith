@@ -3,16 +3,23 @@
 module Docsmith
   module Diff
     # Computes diffs between two DocumentVersion records.
-    # Uses Renderers::Registry to select the renderer for the content type.
+    # For markdown and html content types, a format-aware parser is used
+    # (word-level for markdown, tag-atomic for html).
+    # Falls back to Renderers::Base (line-level) for json and unknown types.
     class Engine
+      PARSERS = {
+        "markdown" => Parsers::Markdown,
+        "html"     => Parsers::Html
+      }.freeze
+
       class << self
         # @param version_a [Docsmith::DocumentVersion] the older version
         # @param version_b [Docsmith::DocumentVersion] the newer version
         # @return [Docsmith::Diff::Result]
         def between(version_a, version_b)
           content_type = version_a.content_type.to_s
-          renderer     = Renderers::Registry.for(content_type).new
-          changes      = renderer.compute(version_a.content.to_s, version_b.content.to_s)
+          parser       = PARSERS.fetch(content_type, Renderers::Base).new
+          changes      = parser.compute(version_a.content.to_s, version_b.content.to_s)
 
           Result.new(
             content_type: content_type,
