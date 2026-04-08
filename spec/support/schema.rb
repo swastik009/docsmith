@@ -30,11 +30,9 @@ ActiveRecord::Schema.define do
     t.string   :change_summary
     t.text     :metadata,         default: "{}"
     t.datetime :created_at,       null: false
-    t.bigint :branch_id   # null = main branch; non-null = branch version
   end
   add_index :docsmith_versions, %i[document_id version_number], unique: true
   add_index :docsmith_versions, %i[author_type author_id]
-  add_index :docsmith_versions, :branch_id
 
   create_table :docsmith_version_tags, force: true do |t|
     t.bigint   :document_id,   null: false
@@ -81,19 +79,4 @@ ActiveRecord::Schema.define do
   add_index :docsmith_comments, :version_id
   add_index :docsmith_comments, :parent_id
   add_index :docsmith_comments, %i[author_type author_id]
-
-  create_table :docsmith_branches, force: true do |t|
-    t.bigint   :document_id,       null: false
-    t.string   :name,              null: false
-    t.bigint   :source_version_id, null: false
-    t.bigint   :head_version_id
-    t.string   :author_type
-    t.bigint   :author_id
-    t.string   :status,            null: false, default: "active"
-    t.datetime :merged_at
-    t.datetime :created_at,        null: false
-    t.datetime :updated_at,        null: false
-  end
-
-  add_index :docsmith_branches, %i[document_id name], unique: true
 end

@@ -29,10 +29,6 @@ require_relative "docsmith/comments/comment"
 require_relative "docsmith/comments/anchor"
 require_relative "docsmith/comments/manager"
 require_relative "docsmith/comments/migrator"
-require_relative "docsmith/merge_result"
-require_relative "docsmith/branches/branch"
-require_relative "docsmith/branches/merger"
-require_relative "docsmith/branches/manager"
 
 module Docsmith
   class << self
