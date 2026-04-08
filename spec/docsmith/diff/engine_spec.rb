@@ -25,8 +25,10 @@ RSpec.describe Docsmith::Diff::Engine do
       expect(result.to_version).to eq(2)
     end
 
-    it "detects the added line" do
-      expect(result.additions).to eq(1)
+    it "detects token additions (word-level for markdown)" do
+      # v1: "line one\nline two"   → tokens: ["line", "one", "\n", "line", "two"]
+      # v2: adds "\nline three"    → 3 new tokens: "\n", "line", "three"
+      expect(result.additions).to eq(3)
       expect(result.deletions).to eq(0)
     end
   end
@@ -35,7 +37,7 @@ RSpec.describe Docsmith::Diff::Engine do
     it "delegates to Engine.between and returns a Result" do
       result = Docsmith::Diff.between(v1, v2)
       expect(result).to be_a(Docsmith::Diff::Result)
-      expect(result.additions).to eq(1)
+      expect(result.additions).to eq(3)
     end
   end
 

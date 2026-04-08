@@ -20,7 +20,7 @@ RSpec.describe "Phase 2: Diff & Rendering integration" do
 
   it "diff_from returns correct addition count" do
     result = article.diff_from(1)
-    expect(result.additions).to eq(1)
+    expect(result.additions).to eq(3)
     expect(result.deletions).to eq(0)
   end
 
@@ -38,7 +38,7 @@ RSpec.describe "Phase 2: Diff & Rendering integration" do
   it "Diff::Result#to_json returns valid JSON with stats" do
     result = article.diff_between(1, 2)
     parsed = JSON.parse(result.to_json)
-    expect(parsed["stats"]["additions"]).to eq(1)
+    expect(parsed["stats"]["additions"]).to eq(3)
   end
 
   it "DocumentVersion#render(:html) returns content" do
