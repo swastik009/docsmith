@@ -1,43 +1,66 @@
 # Docsmith
 
-TODO: Delete this and the text below, and describe your gem
+Docsmith adds snapshot-based versioning, format-aware diffs, and inline comments to any
+ActiveRecord model — with zero system dependencies.
 
-Welcome to your new gem! In this directory, you'll find the files you need to be able to package up your Ruby library into a gem. Put your Ruby code in the file `lib/docsmith`. To experiment with that code, run `bin/console` for an interactive prompt.
+## Features
 
-## Installation
+- **Full content snapshots** for HTML, Markdown, and JSON — instant rollback to any version
+- **Format-aware diffs** — word-level diffs for Markdown; HTML tags treated as atomic tokens
+- **Inline and document-level comments** with threading, resolution, and version migration
+- **Debounced auto-save** with per-class and global configuration
+- **Lifecycle events** — hook into version_created, version_restored, version_tagged
+- **Clean service API** — works standalone without any model mixin
 
-TODO: Replace `UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG` with your gem name right after releasing it to RubyGems.org. Please do not do it earlier due to security reasons. Alternatively, replace this section with instructions to install your gem from git if you don't plan to release to RubyGems.org.
+## Quick Start
 
-Install the gem and add to the application's Gemfile by executing:
-
-```bash
-bundle add UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+```ruby
+# Gemfile
+gem "docsmith"
 ```
 
-If bundler is not being used to manage dependencies, install the gem by executing:
-
 ```bash
-gem install UPDATE_WITH_YOUR_GEM_NAME_IMMEDIATELY_AFTER_RELEASE_TO_RUBYGEMS_ORG
+rails generate docsmith:install
+rails db:migrate
 ```
 
-## Usage
+```ruby
+class Article < ApplicationRecord
+  include Docsmith::Versionable
+  docsmith_config { content_field :body; content_type :markdown }
+end
 
-TODO: Write usage instructions here
+article.body = "New draft"
+article.save!
+article.save_version!(author: current_user, summary: "First draft")
+
+result = article.diff_from(1)
+result.additions   # word-level count for markdown
+result.to_html     # <ins>/<del> markup
+```
+
+## Documentation
+
+See **[USAGE.md](USAGE.md)** for full documentation including:
+
+- Installation and migration
+- Per-class and global configuration
+- Saving, querying, and restoring versions
+- Version tagging
+- Format-aware diffs (Markdown and HTML parsers)
+- Inline and document-level comments
+- Events and hooks
+- Standalone Document API
+- Configuration reference
 
 ## Development
 
-After checking out the repo, run `bin/setup` to install dependencies. Then, run `rake spec` to run the tests. You can also run `bin/console` for an interactive prompt that will allow you to experiment.
-
-To install this gem onto your local machine, run `bundle exec rake install`. To release a new version, update the version number in `version.rb`, and then run `bundle exec rake release`, which will create a git tag for the version, push git commits and the created tag, and push the `.gem` file to [rubygems.org](https://rubygems.org).
-
-## Contributing
-
-Bug reports and pull requests are welcome on GitHub at https://github.com/[USERNAME]/docsmith. This project is intended to be a safe, welcoming space for collaboration, and contributors are expected to adhere to the [code of conduct](https://github.com/[USERNAME]/docsmith/blob/master/CODE_OF_CONDUCT.md).
+```bash
+bin/setup
+bundle exec rspec    # run tests
+bin/console          # interactive console
+```
 
 ## License
 
-The gem is available as open source under the terms of the [MIT License](https://opensource.org/licenses/MIT).
-
-## Code of Conduct
-
-Everyone interacting in the Docsmith project's codebases, issue trackers, chat rooms and mailing lists is expected to follow the [code of conduct](https://github.com/[USERNAME]/docsmith/blob/master/CODE_OF_CONDUCT.md).
+MIT — see [LICENSE.txt](LICENSE.txt).
