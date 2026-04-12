@@ -1,5 +1,7 @@
 # Docsmith
 
+[![Gem Version](https://badge.fury.io/rb/docsmith.svg)](https://rubygems.org/gems/docsmith)
+
 Docsmith adds snapshot-based versioning, format-aware diffs, and inline comments to any
 ActiveRecord model — with zero system dependencies.
 
@@ -60,6 +62,10 @@ bin/setup
 bundle exec rspec    # run tests
 bin/console          # interactive console
 ```
+
+## How this was built
+
+Honest note: this gem was built over two weekends using [Claude Code](https://claude.ai/code) with the superpowers plugin. Not vibe-coding — the planning, architecture decisions, and implementation were all deliberate. If you're curious how it came together, the planning docs and implementation notes are in [docs/superpowers](docs/superpowers).
 
 ## License
 
