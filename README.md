@@ -67,6 +67,8 @@ bin/console          # interactive console
 
 Honest note: this gem was built over two weekends using [Claude Code](https://claude.ai/code) with the superpowers plugin. Not vibe-coding — the planning, architecture decisions, and implementation were all deliberate. If you're curious how it came together, the planning docs and implementation notes are in [docs/superpowers](docs/superpowers).
 
+Early designs got ambitious fast — branching, merging, conflict resolution. Turns out that's a lot of machinery for what is ultimately a document version manager. I stripped it back to what actually matters: snapshots, diffs, and comments. You can see all the planning in [docs/superpowers](docs/superpowers).
+
 ## License
 
 MIT — see [LICENSE.txt](LICENSE.txt).
