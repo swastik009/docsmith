@@ -1,0 +1,17 @@
+# macOS
+.DS_Store
+
+# Ruby
+*.gem
+*.rbc
+.bundle
+.yardoc
+_yardoc/
+coverage/
+doc/
+pkg/
+tmp/
+vendor/bundle
+
+# RSpec
+.rspec_status
