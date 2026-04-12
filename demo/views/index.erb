@@ -1,0 +1,28 @@
+<div class="card">
+  <h1>Articles</h1>
+  <form action="/articles" method="post">
+    <label>Title</label>
+    <input type="text" name="title" placeholder="My article title" required>
+    <label>Body (Markdown)</label>
+    <textarea name="body" rows="5" placeholder="# Hello&#10;&#10;Write something here..."></textarea>
+    <button type="submit">Create &amp; Save Version</button>
+  </form>
+</div>
+
+<% if @articles.any? %>
+<div class="card">
+  <table>
+    <tr><th>Title</th><th>Versions</th><th>Created</th><th></th></tr>
+    <% @articles.each do |a| %>
+    <tr>
+      <td><strong><%= a.title %></strong></td>
+      <td><%= a.versions.count %></td>
+      <td><%= a.created_at.strftime("%b %d %H:%M") %></td>
+      <td><a class="btn btn-sm" href="/articles/<%= a.id %>">Open →</a></td>
+    </tr>
+    <% end %>
+  </table>
+</div>
+<% else %>
+  <p style="color:#888;text-align:center;margin-top:32px;">No articles yet — create one above.</p>
+<% end %>

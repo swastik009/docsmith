@@ -1,0 +1,26 @@
+<div class="card">
+  <a href="/articles/<%= @article.id %>" class="btn btn-sm btn-secondary" style="float:right">← Back</a>
+  <h1>Diff: <%= @article.title %></h1>
+  <p style="color:#666;font-size:13px">v<%= @from %> → v<%= @to %></p>
+
+  <div style="margin-top:12px;display:flex;gap:16px;font-size:13px">
+    <span style="color:#155724">+<%= @diff.additions %> additions</span>
+    <span style="color:#721c24">−<%= @diff.deletions %> deletions</span>
+    <span style="color:#555"><%= @diff.changes.count %> change groups</span>
+  </div>
+</div>
+
+<div class="card" style="overflow-x:auto">
+  <h2>Line diff (HTML render)</h2>
+  <% html = @diff.to_html %>
+  <% if html.strip.empty? %>
+    <p style="color:#888;font-size:13px">Versions are identical.</p>
+  <% else %>
+    <%= html %>
+  <% end %>
+</div>
+
+<div class="card">
+  <h2>JSON diff</h2>
+  <pre style="background:#f8f9fa;padding:12px;border-radius:4px;font-size:11px;overflow-x:auto"><%= JSON.pretty_generate(JSON.parse(@diff.to_json)) %></pre>
+</div>

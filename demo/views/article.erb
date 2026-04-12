@@ -1,0 +1,118 @@
+<% notice = params[:notice]; error_key = params[:error] %>
+<% if notice == "restored" %><div class="notice">Version restored — new snapshot created.</div><% end %>
+<% if notice == "tagged"   %><div class="notice">Tag saved.</div><% end %>
+<% if notice == "unchanged"%><div class="notice">Content unchanged — no new version created.</div><% end %>
+<% if error_key == "tag_exists" %><div class="error">That tag name already exists on this document.</div><% end %>
+
+<div class="card">
+  <h1><%= @article.title %></h1>
+  <p style="color:#666;font-size:13px">
+    <%= @versions.count %> version(s) &nbsp;|&nbsp;
+    Current: v<%= @current&.version_number || "—" %>
+  </p>
+</div>
+
+<div class="grid2">
+
+  <!-- LEFT: Save new version -->
+  <div class="card">
+    <h2>Save New Version</h2>
+    <form action="/articles/<%= @article.id %>/versions" method="post">
+      <label>Body (Markdown)</label>
+      <textarea name="body" rows="6"><%= @article.body %></textarea>
+      <label>Change summary (optional)</label>
+      <input type="text" name="summary" placeholder="What changed?">
+      <button type="submit">Save Version</button>
+    </form>
+  </div>
+
+  <!-- RIGHT: Version list + actions -->
+  <div class="card">
+    <h2>Version History</h2>
+    <table>
+      <tr><th>#</th><th>Summary</th><th>Tags</th><th>Actions</th></tr>
+      <% @versions.each do |v| %>
+      <% tags = Docsmith::VersionTag.where(version_id: v.id).pluck(:name) %>
+      <tr>
+        <td>v<%= v.version_number %></td>
+        <td style="max-width:120px;word-break:break-word"><%= v.change_summary || "—" %></td>
+        <td><% tags.each do |t| %><span class="tag"><%= t %></span><% end %></td>
+        <td>
+          <form action="/articles/<%= @article.id %>/restore" method="post" style="display:inline">
+            <input type="hidden" name="version_number" value="<%= v.version_number %>">
+            <button class="btn btn-sm btn-secondary" onclick="return confirm('Restore v<%= v.version_number %>?')">Restore</button>
+          </form>
+        </td>
+      </tr>
+      <% end %>
+    </table>
+
+    <% if @versions.count >= 2 %>
+    <hr style="margin:12px 0;border-color:#eee">
+    <h2>View Diff</h2>
+    <form action="/articles/<%= @article.id %>/diff" method="get" style="display:flex;gap:8px;align-items:flex-end;flex-wrap:wrap">
+      <div>
+        <label>From v</label>
+        <select name="from" style="width:70px">
+          <% @versions.each do |v| %><option><%= v.version_number %></option><% end %>
+        </select>
+      </div>
+      <div>
+        <label>To v</label>
+        <select name="to" style="width:70px">
+          <% @versions.reverse_each do |v| %><option><%= v.version_number %></option><% end %>
+        </select>
+      </div>
+      <button type="submit" class="btn btn-sm">Diff →</button>
+    </form>
+    <% end %>
+
+    <hr style="margin:12px 0;border-color:#eee">
+    <h2>Tag a Version</h2>
+    <form action="/articles/<%= @article.id %>/tag" method="post" style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+      <div>
+        <label>Version #</label>
+        <input type="number" name="version_number" value="<%= @current&.version_number %>" style="width:70px">
+      </div>
+      <div style="flex:1">
+        <label>Tag name</label>
+        <input type="text" name="tag_name" placeholder="v1.0-release">
+      </div>
+      <button type="submit" class="btn btn-sm btn-success">Tag</button>
+    </form>
+  </div>
+
+</div>
+
+<!-- Comments -->
+<div class="card">
+  <h2>Comments on Current Version (v<%= @current&.version_number %>)</h2>
+  <% if @current %>
+    <% comments = @article.comments_on(version: @current.version_number) %>
+    <% if comments.any? %>
+      <% comments.each do |c| %>
+      <div class="comment <%= 'resolved' if c.resolved %>">
+        <strong>Demo User</strong> &nbsp;<span style="color:#888;font-size:11px"><%= c.created_at.strftime("%H:%M:%S") %></span>
+        <% if c.resolved %><span class="tag" style="background:#d1fae5;color:#065f46">resolved</span><% end %>
+        <p style="margin-top:4px"><%= c.body %></p>
+        <% unless c.resolved %>
+        <form action="/articles/<%= @article.id %>/comments/<%= c.id %>/resolve" method="post" style="margin-top:6px">
+          <button class="btn btn-sm btn-secondary">Resolve</button>
+        </form>
+        <% end %>
+      </div>
+      <% end %>
+    <% else %>
+      <p style="color:#888;font-size:13px">No comments yet.</p>
+    <% end %>
+
+    <form action="/articles/<%= @article.id %>/comments" method="post" style="margin-top:12px;display:flex;gap:8px;align-items:flex-end">
+      <input type="hidden" name="version_number" value="<%= @current.version_number %>">
+      <div style="flex:1">
+        <label>Add comment on v<%= @current.version_number %></label>
+        <input type="text" name="body" placeholder="Leave a comment..." required>
+      </div>
+      <button type="submit" class="btn btn-sm">Post</button>
+    </form>
+  <% end %>
+</div>

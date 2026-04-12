@@ -1,0 +1,16 @@
+# frozen_string_literal: true
+
+source "https://rubygems.org"
+
+gem "sinatra", "~> 4.0"
+gem "sinatra-contrib", "~> 4.0"
+gem "activerecord", ">= 7.0"
+gem "activesupport", ">= 7.0"
+gem "sqlite3", "~> 2.0"
+gem "rack", "~> 3.0"
+gem "rackup", "~> 2.0"
+gem "webrick", "~> 1.8"
+gem "diff-lcs", "~> 1.5"
+
+# load docsmith from parent dir
+gem "docsmith", path: ".."

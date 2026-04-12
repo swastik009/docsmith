@@ -41,6 +41,17 @@ result.additions   # word-level count for markdown
 result.to_html     # <ins>/<del> markup
 ```
 
+## Example App
+
+A self-contained Sinatra demo is in [`demo/`](demo/). It shows versioning, diffs, and comments working end-to-end — no Rails required.
+
+```bash
+cd demo
+bundle install
+ruby app.rb
+# open http://localhost:4567
+```
+
 ## Documentation
 
 See **[USAGE.md](USAGE.md)** for full documentation including:
