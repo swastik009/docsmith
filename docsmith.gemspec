@@ -24,8 +24,6 @@ Gem::Specification.new do |spec|
   spec.license = 'MIT'
   spec.required_ruby_version = '>= 3.1.0'
 
-  spec.metadata['allowed_push_host'] = "TODO: Set to your gem server 'https://example.com'"
-
   spec.metadata["homepage_uri"]    = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/swastik009/docsmith"
   spec.metadata["changelog_uri"]   = "https://github.com/swastik009/docsmith/blob/main/CHANGELOG.md"
@@ -43,8 +41,8 @@ Gem::Specification.new do |spec|
   spec.executables = spec.files.grep(%r{\Aexe/}) { |f| File.basename(f) }
   spec.require_paths = ['lib']
 
-  spec.add_dependency "activerecord",  ">= 7.0"
-  spec.add_dependency "activesupport", ">= 7.0"
+  spec.add_dependency "activerecord",  "~> 7.0"
+  spec.add_dependency "activesupport", "~> 7.0"
   spec.add_dependency "diff-lcs",      "~> 1.5"
 
   spec.add_development_dependency "rspec",       "~> 3.12"
