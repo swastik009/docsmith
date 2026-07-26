@@ -58,5 +58,28 @@ RSpec.describe Docsmith::Comments::Anchor do
         expect(result["status"]).to eq(Docsmith::Comments::Anchor::ORPHANED)
       end
     end
+
+    context "with a malformed anchor" do
+      # These previously reached content[nil...nil] / content.index(nil) and
+      # raised TypeError out of the middle of a comment migration loop.
+      it "orphans an anchor with no anchored_text instead of raising" do
+        result = described_class.migrate("some content", { "start_offset" => 0, "end_offset" => 5 })
+        expect(result["status"]).to eq(Docsmith::Comments::Anchor::ORPHANED)
+      end
+
+      it "orphans an anchor with empty anchored_text instead of matching at 0" do
+        anchor = { "start_offset" => 0, "end_offset" => 0, "anchored_text" => "" }
+        result = described_class.migrate("some content", anchor)
+        expect(result["status"]).to eq(Docsmith::Comments::Anchor::ORPHANED)
+      end
+
+      it "handles missing offsets when the text can still be relocated" do
+        anchor = { "anchored_text" => "content", "content_hash" => "stale" }
+        result = described_class.migrate("some content", anchor)
+
+        expect(result["status"]).to eq(Docsmith::Comments::Anchor::DRIFTED)
+        expect(result["start_offset"]).to eq(5)
+      end
+    end
   end
 end

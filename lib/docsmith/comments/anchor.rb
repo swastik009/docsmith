@@ -45,8 +45,13 @@ module Docsmith
         original_hash = anchor_data["content_hash"]
         original_text = anchor_data["anchored_text"]
 
+        # An anchor missing its offsets or its captured text cannot be relocated.
+        # Previously this reached content[nil...nil] / content.index(nil) and
+        # raised TypeError out of a migration loop.
+        return anchor_data.merge("status" => ORPHANED) if original_text.nil? || original_text.empty?
+
         # 1. Exact offset check
-        candidate = content[start_off...end_off].to_s
+        candidate = start_off.nil? || end_off.nil? ? "" : content[start_off...end_off].to_s
         return anchor_data.merge("status" => ACTIVE) if Digest::SHA256.hexdigest(candidate) == original_hash
 
         # 2. Full-text search for relocated text
