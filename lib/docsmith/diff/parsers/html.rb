@@ -7,56 +7,23 @@ module Docsmith
     module Parsers
       # HTML-aware diff parser for HTML documents.
       #
-      # Tokenizes HTML so that each tag (including its attributes) is one atomic
-      # unit and text words are separate units. This prevents the diff engine from
-      # splitting `<p class="foo">` into angle brackets, attribute names, and values.
+      # Tokenizes so each tag (with its attributes) is one atomic unit and text
+      # words are separate units. This keeps the diff engine from splitting
+      # `<p class="foo">` into angle brackets, attribute names, and values.
       #
-      # Tokenization regex: /<[^>]+>|[^\s<>]+/
-      #   - /<[^>]+>/    matches any HTML tag: <p>, </p>, <div class="x">, <br/>
-      #   - /[^\s<>]+/   matches words in text content between tags
+      #   "<p>Hello world</p>" → ["<p>", "Hello", "world", "</p>"]
       #
-      # Example: "<p>Hello world</p>" → ["<p>", "Hello", "world", "</p>"]
-      #
-      # The :line key in change hashes stores the 1-indexed token position
-      # (not a line number) for compatibility with Diff::Result serialization.
+      # Grouping, offsets, and rendering all come from Renderers::Base — this
+      # class only decides where token boundaries fall.
       class Html < Renderers::Base
-        TAG_OR_WORD = /<[^>]+>|[^\s<>]+/.freeze
+        # /<[^>]+>/  any tag: <p>, </p>, <div class="x">, <br/>
+        # /[^\s<>]+/ words in text content between tags
+        TAG_OR_WORD = /<[^>]+>|[^\s<>]+/
 
-        # @param old_content [String]
-        # @param new_content [String]
-        # @return [Array<Hash>] change hashes with :type, :line (token index), and content keys
-        def compute(old_content, new_content)
-          old_tokens = tokenize(old_content)
-          new_tokens = tokenize(new_content)
-          changes    = []
-
-          ::Diff::LCS.sdiff(old_tokens, new_tokens).each do |hunk|
-            case hunk.action
-            when "+"
-              changes << { type: :addition, line: hunk.new_position + 1, content: hunk.new_element.to_s }
-            when "-"
-              changes << { type: :deletion, line: hunk.old_position + 1, content: hunk.old_element.to_s }
-            when "!"
-              changes << {
-                type:        :modification,
-                line:        hunk.old_position + 1,
-                old_content: hunk.old_element.to_s,
-                new_content: hunk.new_element.to_s
-              }
-            end
-          end
-
-          changes
-        end
-
-        private
-
-        # Splits HTML into tokens:
-        # - Each HTML tag (including attributes) is one token
-        # - Each word in text content is one token
-        # Whitespace between tokens is discarded.
+        # @param content [String]
+        # @return [Array<Array(String, Integer)>] [token, start_offset] pairs
         def tokenize(content)
-          content.scan(TAG_OR_WORD)
+          scan_with_offsets(content, TAG_OR_WORD)
         end
       end
     end

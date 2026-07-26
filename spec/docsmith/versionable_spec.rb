@@ -278,7 +278,7 @@ RSpec.describe Docsmith::Versionable do
       result = article.diff_from(1)
       expect(result).to be_a(Docsmith::Diff::Result)
       expect(result.from_version).to eq(1)
-      expect(result.additions).to eq(3)
+      expect(result.insertions).to eq(1)
     end
 
     it "raises ActiveRecord::RecordNotFound for a non-existent version" do

@@ -25,11 +25,14 @@ RSpec.describe Docsmith::Diff::Engine do
       expect(result.to_version).to eq(2)
     end
 
-    it "detects token additions (word-level for markdown)" do
-      # v1: "line one\nline two"   → tokens: ["line", "one", "\n", "line", "two"]
-      # v2: adds "\nline three"    → 3 new tokens: "\n", "line", "three"
-      expect(result.additions).to eq(3)
-      expect(result.deletions).to eq(0)
+    it "reports an added line as one insert (word-level for markdown)" do
+      # v1: "line one\nline two"  →  v2 appends "\nline three".
+      # The three added tokens ("\n", "line", "three") are one contiguous run,
+      # so they collapse into a single edit.
+      expect(result.stats).to eq(
+        "insertions" => 1, "deletions" => 0, "replacements" => 0, "total" => 1
+      )
+      expect(result.changes.first[:new][:text]).to eq("\nline three")
     end
   end
 
@@ -37,7 +40,7 @@ RSpec.describe Docsmith::Diff::Engine do
     it "delegates to Engine.between and returns a Result" do
       result = Docsmith::Diff.between(v1, v2)
       expect(result).to be_a(Docsmith::Diff::Result)
-      expect(result.additions).to eq(3)
+      expect(result.insertions).to eq(1)
     end
   end
 
@@ -65,15 +68,17 @@ RSpec.describe Docsmith::Diff::Engine do
 
     it "uses Markdown parser for markdown content — detects word addition" do
       result = described_class.between(md_v1, md_v2)
-      # "Hello world" → "Hello Ruby world": 1 word added ("Ruby")
-      expect(result.additions).to eq(1)
-      expect(result.changes.find { |c| c[:type] == :addition }[:content]).to eq("Ruby")
+      # "Hello world" → "Hello Ruby world": one word inserted
+      expect(result.insertions).to eq(1)
+      expect(result.changes.first[:new][:text]).to eq("Ruby")
     end
 
     it "uses HTML parser for html content — treats tags as atomic tokens" do
       result = described_class.between(html_v1, html_v2)
-      # "<p>Hello</p>" → "<p>Hello</p><p>World</p>": 3 token additions
-      expect(result.additions).to eq(3)
+      # "<p>Hello</p>" → "<p>Hello</p><p>World</p>": one inserted paragraph,
+      # reported as a single edit rather than three token additions.
+      expect(result.insertions).to eq(1)
+      expect(result.changes.first[:new][:text]).to eq("<p>World</p>")
     end
   end
 end

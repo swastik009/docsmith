@@ -3,11 +3,15 @@
 require "spec_helper"
 
 RSpec.describe Docsmith::Diff::Result do
+  def span(start, text, line: 1, column: 1)
+    { start: start, end: start + text.length, line: line, column: column, text: text }
+  end
+
   let(:changes) do
     [
-      { type: :addition,     line: 3, content: "new line" },
-      { type: :deletion,     line: 1, content: "old line" },
-      { type: :modification, line: 2, old_content: "before", new_content: "after" }
+      { type: :insert,  old: span(10, ""),       new: span(10, "new line") },
+      { type: :delete,  old: span(0, "old line"), new: span(0, "") },
+      { type: :replace, old: span(30, "before"),  new: span(30, "after") }
     ]
   end
 
@@ -27,15 +31,9 @@ RSpec.describe Docsmith::Diff::Result do
     expect(result.changes).to eq(changes)
   end
 
-  describe "#additions" do
-    it "counts addition-type changes only" do
-      expect(result.additions).to eq(1)
-    end
-  end
-
-  describe "#deletions" do
-    it "counts deletion-type changes only" do
-      expect(result.deletions).to eq(1)
+  describe "counts" do
+    it "counts each edit kind separately" do
+      expect([result.insertions, result.deletions, result.replacements]).to eq([1, 1, 1])
     end
   end
 
@@ -53,9 +51,11 @@ RSpec.describe Docsmith::Diff::Result do
       expect { JSON.parse(result.to_json) }.not_to raise_error
     end
 
-    it "includes stats block with additions and deletions" do
+    it "includes a stats block counting modifications separately" do
       parsed = JSON.parse(result.to_json)
-      expect(parsed["stats"]).to eq("additions" => 1, "deletions" => 1)
+      expect(parsed["stats"]).to eq(
+        "insertions" => 1, "deletions" => 1, "replacements" => 1, "total" => 3
+      )
     end
 
     it "includes content_type, from_version, to_version" do
@@ -65,16 +65,85 @@ RSpec.describe Docsmith::Diff::Result do
       expect(parsed["to_version"]).to eq(3)
     end
 
-    it "serializes addition changes with position and content" do
+    it "serializes every edit with the same keys and both sides" do
       parsed = JSON.parse(result.to_json)
-      addition = parsed["changes"].find { |c| c["type"] == "addition" }
-      expect(addition).to include("position" => { "line" => 3 }, "content" => "new line")
+
+      expect(parsed["changes"].map(&:keys).uniq).to eq([%w[type old new]])
+      expect(parsed["changes"].flat_map { |c| [c["old"].keys, c["new"].keys] }.uniq)
+        .to eq([%w[start end line column text]])
     end
 
-    it "serializes modification changes with old_content and new_content" do
-      parsed = JSON.parse(result.to_json)
-      mod = parsed["changes"].find { |c| c["type"] == "modification" }
-      expect(mod).to include("old_content" => "before", "new_content" => "after")
+    it "serializes an insert with a zero-width old span" do
+      insert = JSON.parse(result.to_json)["changes"].find { |c| c["type"] == "insert" }
+
+      expect(insert["new"]).to include("text" => "new line")
+      expect(insert["old"]["start"]).to eq(insert["old"]["end"])
+      expect(insert["old"]["text"]).to eq("")
+    end
+
+    it "serializes a replace carrying both old and new text" do
+      replace = JSON.parse(result.to_json)["changes"].find { |c| c["type"] == "replace" }
+
+      expect(replace["old"]).to include("text" => "before")
+      expect(replace["new"]).to include("text" => "after")
+    end
+  end
+
+  describe "#as_json" do
+    it "matches the parsed output of #to_json exactly" do
+      expect(result.as_json).to eq(JSON.parse(result.to_json))
+    end
+
+    it "includes schema_version" do
+      expect(result.as_json["schema_version"]).to eq(Docsmith::JSON_SCHEMA_VERSION)
+    end
+  end
+
+  # The regression that made third-party clients receive a different schema than
+  # the documented one. Without as_json, nesting fell through to Object#as_json
+  # (instance_values): no "stats", and "line" instead of "position".
+  describe "nesting (the ActiveSupport trap)" do
+    it "produces the same payload nested in a Hash as standalone" do
+      expect(JSON.parse({ diff: result }.to_json)).to eq("diff" => JSON.parse(result.to_json))
+    end
+
+    it "produces the same payload nested in an Array as standalone" do
+      expect(JSON.parse([result].to_json)).to eq([JSON.parse(result.to_json)])
+    end
+
+    it "keeps stats when nested" do
+      nested = JSON.parse({ diff: result }.to_json)["diff"]
+      expect(nested["stats"]).to eq(
+        "insertions" => 1, "deletions" => 1, "replacements" => 1, "total" => 3
+      )
+    end
+
+    it "keeps both coordinate sides when nested" do
+      nested = JSON.parse({ diff: result }.to_json)["diff"]
+
+      expect(nested["changes"].map { |c| c["old"] }).to all(be_a(Hash))
+      expect(nested["changes"].map { |c| c["new"] }).to all(be_a(Hash))
+    end
+
+    it "round-trips through JSON.generate" do
+      expect(JSON.parse(JSON.generate(result))).to eq(JSON.parse(result.to_json))
+    end
+  end
+
+  describe "#stats" do
+    it "reports a replace-only diff as non-zero" do
+      only_replaced = described_class.new(
+        content_type: "markdown", from_version: 1, to_version: 2,
+        changes: [{ type: :replace, old: span(0, "a"), new: span(0, "b") }]
+      )
+
+      expect(only_replaced.stats).to eq(
+        "insertions" => 0, "deletions" => 0, "replacements" => 1, "total" => 1
+      )
+    end
+
+    it "keeps insertions and deletions as pure counts" do
+      expect([result.insertions, result.deletions, result.replacements]).to eq([1, 1, 1])
     end
   end
 end

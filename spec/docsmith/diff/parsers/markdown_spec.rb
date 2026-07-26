@@ -6,61 +6,94 @@ require "docsmith/diff/parsers/markdown"
 RSpec.describe Docsmith::Diff::Parsers::Markdown do
   subject(:parser) { described_class.new }
 
+  describe "#tokenize" do
+    it "splits into words and newline runs, each with its start offset" do
+      expect(parser.tokenize("Hello world\n\nFoo"))
+        .to eq([["Hello", 0], ["world", 6], ["\n\n", 11], ["Foo", 13]])
+    end
+
+    it "treats a paragraph break as one token" do
+      expect(parser.tokenize("a\n\n\nb").map(&:first)).to eq(["a", "\n\n\n", "b"])
+    end
+  end
+
   describe "#compute" do
-    it "detects a word addition between versions" do
-      # "Hello world" → "Hello Ruby world"
-      # Old tokens: ["Hello", "world"]
-      # New tokens: ["Hello", "Ruby", "world"]
-      # LCS: ["Hello", "world"] — "Ruby" is inserted
-      changes = parser.compute("Hello world", "Hello Ruby world")
-      expect(changes).to include(a_hash_including(type: :addition, content: "Ruby"))
+    it "reports an inserted word as one insert" do
+      edits = parser.compute("Hello world", "Hello Ruby world")
+
+      expect(edits.length).to eq(1)
+      expect(edits.first[:type]).to eq(:insert)
+      expect(edits.first[:new][:text]).to eq("Ruby")
     end
 
-    it "detects a word deletion between versions" do
-      # "Hello Ruby world" → "Hello world"
-      changes = parser.compute("Hello Ruby world", "Hello world")
-      expect(changes).to include(a_hash_including(type: :deletion, content: "Ruby"))
+    it "reports a deleted word as one delete" do
+      edits = parser.compute("Hello Ruby world", "Hello world")
+
+      expect(edits.first[:type]).to eq(:delete)
+      expect(edits.first[:old][:text]).to eq("Ruby")
     end
 
-    it "detects a word modification" do
-      # "Hello world" → "Hello Ruby"
-      # Old tokens: ["Hello", "world"]
-      # New tokens: ["Hello", "Ruby"]
-      # LCS: ["Hello"] — "world" modified to "Ruby"
-      changes = parser.compute("Hello world", "Hello Ruby")
-      expect(changes).to include(a_hash_including(
-        type:        :modification,
-        old_content: "world",
-        new_content: "Ruby"
-      ))
+    it "reports a changed word as a replace carrying both sides" do
+      edits = parser.compute("Hello world", "Hello Ruby")
+
+      expect(edits.first[:type]).to eq(:replace)
+      expect(edits.first[:old][:text]).to eq("world")
+      expect(edits.first[:new][:text]).to eq("Ruby")
     end
 
     it "returns empty array for identical content" do
       expect(parser.compute("same text", "same text")).to be_empty
     end
 
-    it "treats each whitespace-delimited word as a separate token" do
-      # Adding a new line adds 3 tokens: newline, word, word
-      # "line one\nline two" → "line one\nline two\nline three"
-      # Old tokens: ["line", "one", "\n", "line", "two"]
-      # New tokens: ["line", "one", "\n", "line", "two", "\n", "line", "three"]
-      # Additions: 3 tokens ("\n", "line", "three")
-      changes = parser.compute("line one\nline two", "line one\nline two\nline three")
-      additions = changes.select { |c| c[:type] == :addition }
-      expect(additions.count).to eq(3)
-      expect(additions.map { |c| c[:content] }).to contain_exactly("\n", "line", "three")
+    # Previously this produced three separate entries ("\n", "line", "three")
+    # because every token became its own change.
+    it "collapses a whole added line into a single edit" do
+      edits = parser.compute("line one\nline two", "line one\nline two\nline three")
+
+      expect(edits.length).to eq(1)
+      expect(edits.first[:type]).to eq(:insert)
+      expect(edits.first[:new][:text]).to eq("\nline three")
     end
 
-    it "preserves newlines as distinct tokens for paragraph detection" do
-      # A blank-line paragraph break is one "\n\n" token
-      changes = parser.compute("Para one", "Para one\n\nPara two")
-      expect(changes).to include(a_hash_including(type: :addition, content: "\n\n"))
+    it "collapses an added paragraph into a single edit" do
+      edits = parser.compute("Para one", "Para one\n\nPara two")
+
+      expect(edits.length).to eq(1)
+      expect(edits.first[:new][:text]).to eq("\n\nPara two")
     end
 
-    it "returns change hashes with :line (token index), :type, and :content keys" do
-      changes = parser.compute("foo", "foo bar")
-      addition = changes.find { |c| c[:type] == :addition }
-      expect(addition).to include(:line, :type, :content)
+    it "keeps separate word edits separate" do
+      edits = parser.compute("the quick brown fox", "the slow brown wolf")
+
+      expect(edits.length).to eq(2)
+      expect(edits.map { |e| [e[:old][:text], e[:new][:text]] })
+        .to eq([%w[quick slow], %w[fox wolf]])
+    end
+
+    it "reports real line and column numbers, not token indexes" do
+      edits = parser.compute("alpha beta\ngamma delta", "alpha beta\ngamma DELTA")
+
+      expect(edits.first[:old]).to include(line: 2, column: 7)
+    end
+
+    it "restores whitespace the tokenizer discarded, via the source offsets" do
+      # Spaces are not tokens, but a multi-token edit's text must still include them.
+      edits = parser.compute("a b c", "a X Y Z c")
+
+      expect(edits.first[:new][:text]).to eq("X Y Z")
+    end
+
+    it "produces offsets that address exactly the text they report" do
+      old_content = "one two three"
+      new_content = "one TWO THREE"
+      edits = parser.compute(old_content, new_content)
+
+      expect(edits).to all(
+        satisfy do |e|
+          old_content[e[:old][:start]...e[:old][:end]] == e[:old][:text] &&
+            new_content[e[:new][:start]...e[:new][:end]] == e[:new][:text]
+        end
+      )
     end
   end
 end

@@ -6,44 +6,52 @@ require "docsmith/diff/parsers/html"
 RSpec.describe Docsmith::Diff::Parsers::Html do
   subject(:parser) { described_class.new }
 
-  describe "#compute" do
-    it "treats an opening tag as one atomic token" do
-      # "<p>Hello</p>" → "<span>Hello</span>"
-      # Tokens: ["<p>", "Hello", "</p>"] vs ["<span>", "Hello", "</span>"]
-      # Modifications: "<p>"→"<span>", "</p>"→"</span>"
-      changes = parser.compute("<p>Hello</p>", "<span>Hello</span>")
-      mods = changes.select { |c| c[:type] == :modification }
-      expect(mods).to include(a_hash_including(old_content: "<p>", new_content: "<span>"))
-      expect(mods).to include(a_hash_including(old_content: "</p>", new_content: "</span>"))
+  describe "#tokenize" do
+    it "treats each tag as one atomic token, with start offsets" do
+      expect(parser.tokenize("<p>Hi</p>"))
+        .to eq([["<p>", 0], ["Hi", 3], ["</p>", 5]])
     end
 
-    it "detects a new paragraph added (3 new tokens)" do
-      # "<p>Hello</p>" → "<p>Hello</p><p>World</p>"
-      # Old tokens: ["<p>", "Hello", "</p>"]
-      # New tokens: ["<p>", "Hello", "</p>", "<p>", "World", "</p>"]
-      # LCS: first 3 match — 3 additions: "<p>", "World", "</p>"
-      changes = parser.compute("<p>Hello</p>", "<p>Hello</p><p>World</p>")
-      additions = changes.select { |c| c[:type] == :addition }
-      expect(additions.map { |c| c[:content] }).to contain_exactly("<p>", "World", "</p>")
+    it "keeps a tag with attributes as a single token" do
+      expect(parser.tokenize('<div class="foo bar">x</div>').map(&:first))
+        .to eq(['<div class="foo bar">', "x", "</div>"])
+    end
+
+    it "never emits bare angle brackets as tokens" do
+      expect(parser.tokenize("<p>a</p>").map(&:first)).not_to include("<", ">")
+    end
+  end
+
+  describe "#compute" do
+    it "reports a changed tag pair as replaces carrying both sides" do
+      edits = parser.compute("<p>Hello</p>", "<span>Hello</span>")
+
+      expect(edits.map { |e| [e[:old][:text], e[:new][:text]] })
+        .to eq([["<p>", "<span>"], ["</p>", "</span>"]])
+    end
+
+    # Previously three separate entries: "<p>", "World", "</p>".
+    it "collapses an added paragraph into a single insert" do
+      edits = parser.compute("<p>Hello</p>", "<p>Hello</p><p>World</p>")
+
+      expect(edits.length).to eq(1)
+      expect(edits.first[:type]).to eq(:insert)
+      expect(edits.first[:new][:text]).to eq("<p>World</p>")
     end
 
     it "detects a word change inside a tag" do
-      changes = parser.compute("<p>Hello world</p>", "<p>Hello Ruby</p>")
-      expect(changes).to include(a_hash_including(
-        type:        :modification,
-        old_content: "world",
-        new_content: "Ruby"
-      ))
+      edits = parser.compute("<p>Hello world</p>", "<p>Hello Ruby</p>")
+
+      expect(edits.first[:type]).to eq(:replace)
+      expect(edits.first[:old][:text]).to eq("world")
+      expect(edits.first[:new][:text]).to eq("Ruby")
     end
 
-    it "treats tag with attributes as one atomic token" do
-      # "<div class=\"foo\">" must be ONE token, not split on spaces inside the tag
-      changes = parser.compute('<div class="foo">bar</div>', '<div class="baz">bar</div>')
-      mods = changes.select { |c| c[:type] == :modification }
-      expect(mods).to include(a_hash_including(
-        old_content: '<div class="foo">',
-        new_content: '<div class="baz">'
-      ))
+    it "treats a tag with attributes as one atomic unit when it changes" do
+      edits = parser.compute('<div class="foo">bar</div>', '<div class="baz">bar</div>')
+
+      expect(edits.first[:old][:text]).to eq('<div class="foo">')
+      expect(edits.first[:new][:text]).to eq('<div class="baz">')
     end
 
     it "returns empty array for identical HTML" do
@@ -51,18 +59,20 @@ RSpec.describe Docsmith::Diff::Parsers::Html do
       expect(parser.compute(html, html)).to be_empty
     end
 
-    it "does not split tag delimiters < and > as separate tokens" do
-      # If the tokenizer split on < and >, the open bracket "<" would be its own token.
-      # Verify that no change content is exactly "<" or ">"
-      changes = parser.compute("<p>a</p>", "<p>b</p>")
-      all_content = changes.flat_map { |c| [c[:content], c[:old_content], c[:new_content]] }.compact
-      expect(all_content).not_to include("<", ">")
-    end
+    # The payload that prompted this redesign: a heading rewrite produced seven
+    # entries whose "line" values ran to 7 in a three-line document.
+    it "collapses a heading rewrite into a single replace with real line numbers" do
+      old_content = "my document\n\nsecond para"
+      new_content = "<h1>this is a new heading</h1>\n\nsecond para"
+      edits = parser.compute(old_content, new_content)
 
-    it "returns change hashes with :line (token index), :type, and content keys" do
-      changes = parser.compute("<p>foo</p>", "<p>foo</p><p>bar</p>")
-      addition = changes.find { |c| c[:type] == :addition }
-      expect(addition).to include(:line, :type, :content)
+      expect(edits.length).to eq(1)
+      expect(edits.first).to include(type: :replace)
+      expect(edits.first[:old]).to include(start: 0, end: 11, line: 1, column: 1, text: "my document")
+      expect(edits.first[:new]).to include(
+        start: 0, end: 30, line: 1, column: 1, text: "<h1>this is a new heading</h1>"
+      )
+      expect(edits.map { |e| e[:new][:line] }.max).to be <= new_content.lines.size
     end
   end
 end

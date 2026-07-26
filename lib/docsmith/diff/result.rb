@@ -13,7 +13,12 @@ module Docsmith
       attr_reader :from_version
       # @return [Integer] version_number of the to (newer) version
       attr_reader :to_version
-      # @return [Array<Hash>] change hashes produced by Renderers::Base#compute
+      # Grouped edits produced by Renderers::Base#compute. Symbol-keyed mirror of
+      # the serialized form: each entry is
+      # { type: :insert|:delete|:replace, old: {...span}, new: {...span} }
+      # where a span is { start:, end:, line:, column:, text: }.
+      #
+      # @return [Array<Hash>]
       attr_reader :changes
 
       # @param content_type [String]
@@ -27,14 +32,34 @@ module Docsmith
         @changes      = changes
       end
 
-      # @return [Integer] number of added lines
-      def additions
-        changes.count { |c| c[:type] == :addition }
+      # @return [Integer] number of pure insertions
+      def insertions
+        changes.count { |c| c[:type] == :insert }
       end
 
-      # @return [Integer] number of deleted lines
+      # @return [Integer] number of pure deletions
       def deletions
-        changes.count { |c| c[:type] == :deletion }
+        changes.count { |c| c[:type] == :delete }
+      end
+
+      # @return [Integer] number of replacements (an old span became a new one)
+      def replacements
+        changes.count { |c| c[:type] == :replace }
+      end
+
+      # Edit counts by kind. insertions and deletions are pure; a replacement is
+      # counted once rather than as one of each, so a rewritten document never
+      # reports 0/0 alongside a non-empty changes array. For git-style totals, add
+      # replacements to either side.
+      #
+      # @return [Hash] string-keyed counts
+      def stats
+        {
+          "insertions"   => insertions,
+          "deletions"    => deletions,
+          "replacements" => replacements,
+          "total"        => changes.length
+        }
       end
 
       # @return [String] HTML diff representation
@@ -42,35 +67,55 @@ module Docsmith
         Renderers::Registry.for(content_type).new.render_html(changes)
       end
 
-      # @return [String] JSON diff representation matching the documented schema
-      def to_json(*)
+      # The canonical JSON representation, and the single source of truth for it.
+      #
+      # Defining as_json is what makes nesting work: ActiveSupport calls it for
+      # `render json: { diff: result }`, `[result].to_json`, and JSON.generate.
+      # Without it those fell through to Object#as_json (instance_values), which
+      # silently dropped "stats" and emitted "line" instead of "position".
+      #
+      # @param options [Hash, nil] accepted for API compatibility; unused
+      # @return [Hash] string-keyed, JSON-ready
+      def as_json(options = nil) # rubocop:disable Lint/UnusedMethodArgument
         {
-          content_type: content_type,
-          from_version: from_version,
-          to_version:   to_version,
-          stats:        { additions: additions, deletions: deletions },
-          changes:      changes.map { |c| serialize_change(c) }
-        }.to_json
+          "schema_version" => Docsmith::JSON_SCHEMA_VERSION,
+          "content_type"   => content_type,
+          "from_version"   => from_version,
+          "to_version"     => to_version,
+          "stats"          => stats,
+          "changes"        => changes.map { |c| serialize_change(c) }
+        }
+      end
+
+      # Args are forwarded so JSON.pretty_generate indents a nested Result
+      # instead of splicing it in as one compact line.
+      #
+      # @return [String] JSON diff representation matching the documented schema
+      def to_json(*args)
+        as_json.to_json(*args)
       end
 
       private
 
+      # Every edit serializes to the same keys, and the two sides never share a
+      # coordinate space. An absent side is a zero-width span marking the point
+      # where text was inserted into, or removed from, that document.
       def serialize_change(change)
-        case change[:type]
-        when :addition
-          { type: "addition", position: { line: change[:line] }, content: change[:content] }
-        when :deletion
-          { type: "deletion", position: { line: change[:line] }, content: change[:content] }
-        when :modification
-          {
-            type:        "modification",
-            position:    { line: change[:line] },
-            old_content: change[:old_content],
-            new_content: change[:new_content]
-          }
-        else
-          change.transform_keys(&:to_s)
-        end
+        {
+          "type" => change[:type].to_s,
+          "old"  => serialize_span(change[:old]),
+          "new"  => serialize_span(change[:new])
+        }
+      end
+
+      def serialize_span(span)
+        {
+          "start"  => span[:start],
+          "end"    => span[:end],
+          "line"   => span[:line],
+          "column" => span[:column],
+          "text"   => span[:text]
+        }
       end
     end
   end

@@ -7,52 +7,25 @@ module Docsmith
     module Parsers
       # Word-level diff parser for Markdown documents.
       #
-      # Instead of comparing line-by-line (as Renderers::Base does), this parser
-      # tokenizes content into individual words and newline groups, then diffs
-      # those tokens. This gives precise word-level change detection for prose,
-      # which is far more useful than "the whole line changed."
+      # Tokenizes into words and newline runs rather than lines, so prose edits
+      # are detected at word granularity instead of "the whole line changed".
       #
-      # Tokenization: content.scan(/\S+|\n+/)
       #   "Hello world\n\nFoo" → ["Hello", "world", "\n\n", "Foo"]
       #
-      # The :line key in change hashes stores the 1-indexed token position
-      # (not a line number) for compatibility with Diff::Result serialization.
+      # Grouping, offsets, and rendering all come from Renderers::Base — this
+      # class only decides where token boundaries fall. Spaces and tabs between
+      # tokens are not themselves tokens, but they are still present in an edit's
+      # `text`, which is sliced from the source between the edit's offsets.
       class Markdown < Renderers::Base
-        # @param old_content [String]
-        # @param new_content [String]
-        # @return [Array<Hash>] change hashes with :type, :line (token index), and content keys
-        def compute(old_content, new_content)
-          old_tokens = tokenize(old_content)
-          new_tokens = tokenize(new_content)
-          changes    = []
-
-          ::Diff::LCS.sdiff(old_tokens, new_tokens).each do |hunk|
-            case hunk.action
-            when "+"
-              changes << { type: :addition, line: hunk.new_position + 1, content: hunk.new_element.to_s }
-            when "-"
-              changes << { type: :deletion, line: hunk.old_position + 1, content: hunk.old_element.to_s }
-            when "!"
-              changes << {
-                type:        :modification,
-                line:        hunk.old_position + 1,
-                old_content: hunk.old_element.to_s,
-                new_content: hunk.new_element.to_s
-              }
-            end
-          end
-
-          changes
-        end
-
-        private
-
-        # Splits markdown into word tokens.
         # \S+ matches any non-whitespace run (words, punctuation, markdown markers).
-        # \n+ matches one or more consecutive newlines as a single token so that
-        # paragraph breaks (\n\n) and line breaks (\n) are each one diffable unit.
+        # \n+ matches consecutive newlines as one token, so a paragraph break
+        # (\n\n) and a line break (\n) are each a single diffable unit.
+        WORD_OR_NEWLINES = /\S+|\n+/
+
+        # @param content [String]
+        # @return [Array<Array(String, Integer)>] [token, start_offset] pairs
         def tokenize(content)
-          content.scan(/\S+|\n+/)
+          scan_with_offsets(content, WORD_OR_NEWLINES)
         end
       end
     end

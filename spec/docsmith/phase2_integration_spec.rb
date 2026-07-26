@@ -18,10 +18,11 @@ RSpec.describe "Phase 2: Diff & Rendering integration" do
     article.save_version!(author: user)
   end
 
-  it "diff_from returns correct addition count" do
+  it "diff_from reports the appended line as one insert" do
     result = article.diff_from(1)
-    expect(result.additions).to eq(3)
+    expect(result.insertions).to eq(1)
     expect(result.deletions).to eq(0)
+    expect(result.changes.first[:new][:text]).to eq("\nline three")
   end
 
   it "diff_between returns a Result with correct from/to version numbers" do
@@ -38,7 +39,9 @@ RSpec.describe "Phase 2: Diff & Rendering integration" do
   it "Diff::Result#to_json returns valid JSON with stats" do
     result = article.diff_between(1, 2)
     parsed = JSON.parse(result.to_json)
-    expect(parsed["stats"]["additions"]).to eq(3)
+    expect(parsed["stats"]).to eq(
+      "insertions" => 1, "deletions" => 0, "replacements" => 0, "total" => 1
+    )
   end
 
   it "DocumentVersion#render(:html) returns content" do
