@@ -17,6 +17,13 @@ ActiveRecord::Schema.define do
     t.timestamps
   end unless ActiveRecord::Base.connection.table_exists?(:articles)
 
+  # HTML-content documents, used to demonstrate config.html_sanitizer.
+  create_table :pages, force: false do |t|
+    t.string :title, null: false
+    t.text   :body
+    t.timestamps
+  end unless ActiveRecord::Base.connection.table_exists?(:pages)
+
   create_table :users, force: false do |t|
     t.string :name, null: false
     t.timestamps
@@ -30,7 +37,7 @@ ActiveRecord::Schema.define do
     t.datetime :last_versioned_at
     t.string   :subject_type
     t.bigint   :subject_id
-    t.text     :metadata,           default: "{}"
+    t.json     :metadata,           null: false, default: {}
     t.timestamps
   end unless ActiveRecord::Base.connection.table_exists?(:docsmith_documents)
 
@@ -46,7 +53,7 @@ ActiveRecord::Schema.define do
     t.string   :author_type
     t.bigint   :author_id
     t.string   :change_summary
-    t.text     :metadata,         default: "{}"
+    t.json     :metadata,         null: false, default: {}
     t.datetime :created_at,       null: false
   end unless ActiveRecord::Base.connection.table_exists?(:docsmith_versions)
 
@@ -70,7 +77,7 @@ ActiveRecord::Schema.define do
     t.bigint   :author_id
     t.text     :body,              null: false
     t.string   :anchor_type,       null: false, default: "document"
-    t.text     :anchor_data,       null: false, default: "{}"
+    t.json     :anchor_data,       null: false, default: {}
     t.boolean  :resolved,          null: false, default: false
     t.string   :resolved_by_type
     t.bigint   :resolved_by_id
@@ -78,6 +85,26 @@ ActiveRecord::Schema.define do
     t.datetime :created_at,        null: false
     t.datetime :updated_at,        null: false
   end unless ActiveRecord::Base.connection.table_exists?(:docsmith_comments)
+
+  # Migrate demo databases created before the :text -> :json column fix.
+  # The create_table calls above are all guarded by table_exists?, so an existing
+  # demo DB would otherwise keep its old :text columns and hand models a raw
+  # String where they now expect a Hash.
+  #
+  # change_column rebuilds the table on SQLite and preserves every row; the
+  # stored values are already JSON text, so they simply start casting to Hash.
+  {
+    docsmith_documents: :metadata,
+    docsmith_versions:  :metadata,
+    docsmith_comments:  :anchor_data
+  }.each do |table, column|
+    next unless ActiveRecord::Base.connection.table_exists?(table)
+
+    info = ActiveRecord::Base.connection.columns(table.to_s).find { |c| c.name == column.to_s }
+    next if info.nil? || info.type == :json
+
+    change_column table, column, :json, null: false, default: {}
+  end
 end
 
 # Seed a default user so we always have an author

@@ -1,0 +1,59 @@
+<div class="card">
+  <h1><%= @page.title %></h1>
+  <p style="color:#666;font-size:13px">
+    <code>content_type: html</code> &nbsp;|&nbsp;
+    <%= @page.versions.count %> version(s) &nbsp;|&nbsp;
+    Current: v<%= @version&.version_number || "—" %>
+  </p>
+</div>
+
+<div class="card">
+  <h2>Stored content (v<%= @version&.version_number %>)</h2>
+  <pre style="background:#f8f9fa;padding:12px;border-radius:4px;font-size:12px;overflow-x:auto"><%= @version&.content %></pre>
+</div>
+
+<div class="card">
+  <h2>render(:html) under each <code>html_sanitizer</code> mode</h2>
+  <p style="color:#666;font-size:13px;margin-bottom:12px">
+    Output is shown as escaped source so this page stays safe to view — under
+    <code>:unsafe_raw</code> the string below is what a real app would inject
+    directly into the DOM, script tag and all.
+  </p>
+
+  <% @renders.each do |label, output| %>
+    <h2 style="margin-top:14px">
+      <code>config.html_sanitizer = <%= label %></code>
+      <% if label.start_with?("nil") %>
+        <span class="tag" style="background:#d1fae5;color:#065f46">safe default</span>
+      <% elsif label == ":unsafe_raw" %>
+        <span class="tag" style="background:#fee2e2;color:#991b1b">executes in the browser</span>
+      <% else %>
+        <span class="tag" style="background:#dbeafe;color:#1e40af">recommended</span>
+      <% end %>
+    </h2>
+    <pre style="background:#f8f9fa;padding:12px;border-radius:4px;font-size:12px;overflow-x:auto"><%= output %></pre>
+    <% if label == "callable" %>
+      <p style="color:#666;font-size:12px">
+        The safe-list sanitizer removes the <code>&lt;script&gt;</code> element and the
+        <code>onerror</code> attribute, but keeps the script's inert text content —
+        standard behaviour, and harmless, since it is no longer executable.
+      </p>
+    <% end %>
+  <% end %>
+
+  <h2 style="margin-top:16px">Live preview — sanitized output only</h2>
+  <div style="border:1px solid #e5e7eb;border-radius:4px;padding:12px">
+    <%== @renders["callable"] %>
+  </div>
+</div>
+
+<div class="card">
+  <h2>Save New Version</h2>
+  <form action="/pages/<%= @page.id %>/versions" method="post">
+    <label>Body (HTML)</label>
+    <textarea name="body" rows="6"><%= @page.body %></textarea>
+    <label>Change summary (optional)</label>
+    <input type="text" name="summary" placeholder="What changed?">
+    <button type="submit">Save Version</button>
+  </form>
+</div>

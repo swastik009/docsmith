@@ -18,3 +18,5 @@ vendor/bundle
 
 # Demo app database
 demo/*.sqlite3
+demo/*.sqlite3-shm
+demo/*.sqlite3-wal

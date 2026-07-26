@@ -12,5 +12,16 @@ gem "rackup", "~> 2.0"
 gem "webrick", "~> 1.8"
 gem "diff-lcs", "~> 1.5"
 
+# Demo only — NOT a docsmith dependency. Docsmith ships no sanitizer so that it
+# stays free of system dependencies; the demo installs one to show the
+# recommended config.html_sanitizer setup. A Rails app already has this
+# via ActionView and needs no extra gem.
+gem "rails-html-sanitizer", "~> 1.6"
+
+# Enables `set :erb, escape_html: true`. Sinatra's stock ERB does NOT escape
+# <%= %>, so without this the demo's own forms are a stored-XSS vector.
+# Pure Ruby, no native extension.
+gem "erubi", "~> 1.13"
+
 # load docsmith from parent dir
 gem "docsmith", path: ".."

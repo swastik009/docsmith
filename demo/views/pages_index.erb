@@ -1,0 +1,33 @@
+<div class="card">
+  <h1>HTML Pages</h1>
+  <p style="color:#666;font-size:13px;margin-bottom:12px">
+    These documents use <code>content_type :html</code>. Docsmith treats stored HTML
+    as untrusted, so <code>render(:html)</code> escapes it unless you configure
+    <code>config.html_sanitizer</code>. Open a page to see all three modes side by side.
+  </p>
+  <form action="/pages" method="post">
+    <label>Title</label>
+    <input type="text" name="title" placeholder="My page title" required>
+    <label>Body (HTML — try including a &lt;script&gt; tag)</label>
+    <textarea name="body" rows="5" placeholder="<p>Hello <strong>world</strong></p>"></textarea>
+    <button type="submit">Create &amp; Save Version</button>
+  </form>
+</div>
+
+<% if @pages.any? %>
+<div class="card">
+  <table>
+    <tr><th>Title</th><th>Versions</th><th>Created</th><th></th></tr>
+    <% @pages.each do |p| %>
+    <tr>
+      <td><strong><%= p.title %></strong></td>
+      <td><%= p.versions.count %></td>
+      <td><%= p.created_at.strftime("%b %d %H:%M") %></td>
+      <td><a class="btn btn-sm" href="/pages/<%= p.id %>">Open →</a></td>
+    </tr>
+    <% end %>
+  </table>
+</div>
+<% else %>
+  <p style="color:#888;text-align:center;margin-top:32px;">No pages yet — create one above.</p>
+<% end %>

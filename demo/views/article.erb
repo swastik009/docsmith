@@ -42,6 +42,7 @@
             <input type="hidden" name="version_number" value="<%= v.version_number %>">
             <button class="btn btn-sm btn-secondary" onclick="return confirm('Restore v<%= v.version_number %>?')">Restore</button>
           </form>
+          <a class="btn btn-sm" href="/articles/<%= @article.id %>/versions/<%= v.version_number %>/export.json">JSON</a>
         </td>
       </tr>
       <% end %>

@@ -3,11 +3,17 @@
   <h1>Diff: <%= @article.title %></h1>
   <p style="color:#666;font-size:13px">v<%= @from %> → v<%= @to %></p>
 
-  <div style="margin-top:12px;display:flex;gap:16px;font-size:13px">
-    <span style="color:#155724">+<%= @diff.additions %> additions</span>
+  <div style="margin-top:12px;display:flex;gap:16px;font-size:13px;flex-wrap:wrap">
+    <span style="color:#155724">+<%= @diff.insertions %> insertions</span>
     <span style="color:#721c24">−<%= @diff.deletions %> deletions</span>
-    <span style="color:#555"><%= @diff.changes.count %> change groups</span>
+    <span style="color:#8a6d3b">~<%= @diff.replacements %> replacements</span>
+    <span style="color:#555"><%= @diff.stats["total"] %> total edits</span>
   </div>
+  <p style="color:#666;font-size:12px;margin-top:8px">
+    Each edit is a contiguous run of changes collapsed into one entry, with real
+    character offsets and line numbers on both sides. insertions and deletions are
+    pure; a changed span counts once as a replacement, not as one of each.
+  </p>
 </div>
 
 <div class="card" style="overflow-x:auto">
@@ -16,11 +22,19 @@
   <% if html.strip.empty? %>
     <p style="color:#888;font-size:13px">Versions are identical.</p>
   <% else %>
-    <%= html %>
+    <%== html %>
   <% end %>
 </div>
 
 <div class="card">
   <h2>JSON diff</h2>
-  <pre style="background:#f8f9fa;padding:12px;border-radius:4px;font-size:11px;overflow-x:auto"><%= JSON.pretty_generate(JSON.parse(@diff.to_json)) %></pre>
+  <pre style="background:#f8f9fa;padding:12px;border-radius:4px;font-size:11px;overflow-x:auto"><%= JSON.pretty_generate(@diff.as_json) %></pre>
+  <p style="color:#666;font-size:12px;margin-top:8px">
+    Served raw at
+    <a href="/articles/<%= @article.id %>/diff.json?from=<%= @from %>&amp;to=<%= @to %>">diff.json</a>
+    — a <strong>nested</strong> payload, the shape third-party clients consume.
+    Before <code>Diff::Result#as_json</code> existed, the <code>diff</code> key there
+    lost <code>stats</code> and emitted <code>line</code> instead of
+    <code>position</code>.
+  </p>
 </div>

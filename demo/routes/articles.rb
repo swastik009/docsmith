@@ -4,6 +4,11 @@ module Demo
   class Articles < Sinatra::Base
     set :views, File.expand_path("../../views", __FILE__)
 
+    # Sinatra's stock ERB does NOT escape <%= %>. Without this, an article title
+    # or comment body containing a <script> tag executes in the browser.
+    # Use <%== %> for the few places that intentionally emit HTML.
+    set :erb, escape_html: true
+
     get "/" do
       @articles = Article.order(created_at: :desc)
       erb :index
@@ -48,6 +53,31 @@ module Demo
       rescue Docsmith::TagAlreadyExists
         redirect "/articles/#{article.id}?error=tag_exists"
       end
+    end
+
+    # The JSON export envelope for a single version.
+    # Add ?parsed=1 on a json document to also get the "data" key.
+    get "/articles/:id/versions/:n/export.json" do
+      content_type :json
+      article = Article.find(params[:id])
+      version = article.version(params[:n].to_i)
+      JSON.pretty_generate(version.export(include_parsed: params[:parsed] == "1"))
+    end
+
+    # A deliberately NESTED payload. This is the shape third-party clients actually
+    # consume, and the one that used to differ from `result.to_json`: before
+    # Diff::Result#as_json existed, the "diff" key below came out with no "stats"
+    # and with "line" instead of "position".
+    get "/articles/:id/diff.json" do
+      content_type :json
+      article = Article.find(params[:id])
+      diff    = article.diff_between(params[:from].to_i, params[:to].to_i)
+
+      JSON.pretty_generate(
+        article:  { id: article.id, title: article.title },
+        versions: article.versions.map { |v| v.export.slice("version_number", "content_type") },
+        diff:     diff
+      )
     end
 
     get "/articles/:id/diff" do
