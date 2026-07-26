@@ -10,7 +10,7 @@ class CreateDocsmithTables < ActiveRecord::Migration[<%= ActiveRecord::Migration
       t.datetime :last_versioned_at
       t.string   :subject_type
       t.bigint   :subject_id
-      t.jsonb    :metadata,           null: false, default: {}
+      t.<%= json_column_type %>    :metadata,           null: false, default: {}
       t.timestamps
     end
     add_index :docsmith_documents, %i[subject_type subject_id]
@@ -23,7 +23,7 @@ class CreateDocsmithTables < ActiveRecord::Migration[<%= ActiveRecord::Migration
       t.string     :author_type
       t.bigint     :author_id
       t.string     :change_summary
-      t.jsonb      :metadata,       null: false, default: {}
+      t.<%= json_column_type %>      :metadata,       null: false, default: {}
       t.datetime   :created_at,     null: false
     end
     add_index :docsmith_versions, %i[document_id version_number], unique: true
@@ -48,7 +48,7 @@ class CreateDocsmithTables < ActiveRecord::Migration[<%= ActiveRecord::Migration
       t.bigint   :author_id
       t.text     :body,              null: false
       t.string   :anchor_type,       null: false, default: "document"
-      t.jsonb    :anchor_data,       null: false, default: {}
+      t.<%= json_column_type %>    :anchor_data,       null: false, default: {}
       t.boolean  :resolved,          null: false, default: false
       t.string   :resolved_by_type
       t.bigint   :resolved_by_id
