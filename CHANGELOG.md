@@ -10,7 +10,8 @@ All notable changes to this project will be documented here.
 
 - **`Diff::Result#as_json`** — the canonical diff payload, and now the single
   source of truth for it. `to_json` delegates to it.
-- **`Diff::Result#modifications` and `#stats`** — explicit change counts.
+- **`Diff::Result#insertions`, `#deletions`, `#replacements` and `#stats`** — explicit
+  edit counts.
 - **`Rendering::JsonRenderer#to_h`** — the canonical content envelope; `#render`
   is `to_h(...).to_json`.
 - **`DocumentVersion#export(**options)`** — the envelope as a Hash, for embedding
@@ -49,11 +50,13 @@ All notable changes to this project will be documented here.
   { "diff": { "content_type": "markdown", "from_version": 1, "to_version": 3,
               "changes": [ { "type": "modification", "line": 4, … } ] } }
 
-  // AFTER — identical either way, plus schema_version and full stats
+  // AFTER — identical either way, plus schema_version and full stats.
+  // See the changes redesign below for the new entry shape and vocabulary.
   { "schema_version": 1, "content_type": "markdown",
     "from_version": 1, "to_version": 3,
-    "stats": { "additions": 2, "deletions": 0, "modifications": 1, "total": 3 },
-    "changes": [ { "type": "modification", "position": { "line": 4 }, … } ] }
+    "stats": { "insertions": 1, "deletions": 0,
+               "replacements": 1, "total": 2 },
+    "changes": [ { "type": "replace", "old": { … }, "new": { … } } ] }
   ```
 
   **`render(:json)` — one envelope instead of two schemas.** It previously returned
