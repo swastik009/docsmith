@@ -1,10 +1,13 @@
 # frozen_string_literal: true
 
 # In-memory SQLite schema for tests.
-# Mirrors db/migrate/create_docsmith_tables.rb with two intentional differences:
-#   1. :jsonb columns use :text here (SQLite has no jsonb type)
-#   2. Foreign key constraints are omitted (SQLite does not enforce them)
-# Production migration uses :jsonb and add_foreign_key for PostgreSQL.
+# Mirrors db/migrate/create_docsmith_tables.rb with one intentional difference:
+# foreign key constraints are omitted (SQLite does not enforce them).
+#
+# JSON payload columns use :json, which SQLite supports and which casts to Hash
+# exactly as PostgreSQL :jsonb does. They must NOT be :text — a text column
+# hands back a raw String, so models would see a different type here than in
+# production, which is what the hand-rolled anchor_data accessors used to hide.
 
 ActiveRecord::Schema.define do
   create_table :docsmith_documents, force: true do |t|
@@ -15,7 +18,7 @@ ActiveRecord::Schema.define do
     t.datetime :last_versioned_at
     t.string   :subject_type
     t.bigint   :subject_id
-    t.text     :metadata,           default: "{}"
+    t.json     :metadata,           null: false, default: {}
     t.timestamps
   end
   add_index :docsmith_documents, %i[subject_type subject_id]
@@ -28,7 +31,7 @@ ActiveRecord::Schema.define do
     t.string   :author_type
     t.bigint   :author_id
     t.string   :change_summary
-    t.text     :metadata,         default: "{}"
+    t.json     :metadata,         null: false, default: {}
     t.datetime :created_at,       null: false
   end
   add_index :docsmith_versions, %i[document_id version_number], unique: true
@@ -68,7 +71,7 @@ ActiveRecord::Schema.define do
     t.bigint   :author_id
     t.text     :body,              null: false
     t.string   :anchor_type,       null: false, default: "document"
-    t.text     :anchor_data,       null: false, default: "{}"
+    t.json     :anchor_data,       null: false, default: {}
     t.boolean  :resolved,          null: false, default: false
     t.string   :resolved_by_type
     t.bigint   :resolved_by_id

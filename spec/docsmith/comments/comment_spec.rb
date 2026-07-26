@@ -62,19 +62,46 @@ RSpec.describe Docsmith::Comments::Comment do
     end
 
     it ".document_level returns only document anchor type" do
-      described_class.create!(version: version, author: user, body: "range", anchor_type: "range", anchor_data: { start_offset: 0, end_offset: 1 }.to_json)
+      described_class.create!(version: version, author: user, body: "range", anchor_type: "range", anchor_data: { start_offset: 0, end_offset: 1 })
       expect(described_class.document_level.count).to eq(3)
       expect(described_class.range_anchored.count).to eq(1)
     end
   end
 
-  describe "#anchor_data accessor" do
-    it "accepts a Hash and returns a Hash" do
-      comment = described_class.create!(
+  describe "anchor_data column" do
+    def comment_with(anchor_data)
+      described_class.create!(
         version: version, author: user, body: "note",
-        anchor_type: "document", anchor_data: { foo: "bar" }
+        anchor_type: "document", anchor_data: anchor_data
       )
-      expect(comment.anchor_data).to be_a(Hash)
+    end
+
+    it "is declared :json, not :text" do
+      # The :text declaration is what forced the hand-rolled accessors, and what
+      # made the model see a String in tests and a Hash in production.
+      expect(described_class.columns_hash["anchor_data"].type).to eq(:json)
+    end
+
+    it "round-trips a nested Hash through the database" do
+      data    = { "range" => { "start" => 0, "end" => 5 }, "tags" => %w[a b] }
+      comment = comment_with(data)
+
+      expect(comment.reload.anchor_data).to eq(data)
+    end
+
+    it "treats a pre-serialized JSON String as a plain string value" do
+      # Documents the 0.2.0 contract: anchor_data takes a Hash. The old :text
+      # column accepted a JSON String and parsed it back into a Hash on read;
+      # a :json column stores that String as a JSON string literal instead, so
+      # it returns a String. Callers passing `.to_json` must stop.
+      expect(comment_with({ foo: "bar" }.to_json).reload.anchor_data).to eq('{"foo":"bar"}')
+    end
+
+    it "reads the default as an empty Hash rather than the string '{}'" do
+      comment = described_class.create!(
+        version: version, author: user, body: "note", anchor_type: "document"
+      )
+      expect(comment.reload.anchor_data).to eq({})
     end
   end
 end

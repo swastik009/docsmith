@@ -25,20 +25,16 @@ module Docsmith
       scope :document_level, -> { where(anchor_type: "document") }
       scope :range_anchored, -> { where(anchor_type: "range") }
 
-      # Deserializes anchor_data from JSON text (SQLite) or returns hash directly (PostgreSQL jsonb).
+      # anchor_data needs no custom accessors: the column is :json everywhere
+      # (:jsonb on PostgreSQL), so ActiveRecord casts it to a Hash on read and
+      # serializes it on write. The previous hand-rolled pair existed only
+      # because the test schema declared the column :text, and it raised an
+      # unrescued JSON::ParserError from a plain attribute reader when the
+      # stored text was malformed.
       #
-      # @return [Hash]
-      def anchor_data
-        raw = read_attribute(:anchor_data)
-        raw.is_a?(String) ? JSON.parse(raw) : raw.to_h
-      end
-
-      # Serializes anchor_data as JSON for storage.
-      #
-      # @param data [Hash, String]
-      def anchor_data=(data)
-        write_attribute(:anchor_data, data.is_a?(String) ? data : data.to_json)
-      end
+      # Assign a Hash, not a JSON String. A String is stored as a JSON string
+      # literal and reads back as a String, where the old :text column would
+      # have parsed it into a Hash.
     end
   end
 end
