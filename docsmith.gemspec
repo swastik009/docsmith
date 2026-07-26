@@ -45,6 +45,12 @@ Gem::Specification.new do |spec|
   spec.add_dependency "activesupport", "~> 7.0"
   spec.add_dependency "diff-lcs",      "~> 1.5"
 
+  # Development only. The install generator requires "rails/generators", which
+  # railties provides — but nothing in lib/docsmith.rb loads it, because Rails
+  # autoloads generators from lib/generators/. Keeping this out of the runtime
+  # dependencies is deliberate: docsmith runs on plain ActiveRecord (the bundled
+  # demo is Sinatra), and a runtime railties would force Rails on those users.
+  spec.add_development_dependency "railties",    ">= 7.0"
   spec.add_development_dependency "rspec",       "~> 3.12"
   spec.add_development_dependency "sqlite3",     "~> 1.4"
   spec.add_development_dependency "factory_bot", "~> 6.0"
