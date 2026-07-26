@@ -37,8 +37,10 @@ article.save!
 article.save_version!(author: current_user, summary: "First draft")
 
 result = article.diff_from(1)
-result.additions   # word-level count for markdown
+result.stats       # => {"insertions"=>1, "deletions"=>0, "replacements"=>1, "total"=>2}
+result.changes     # grouped edits with character offsets and line numbers
 result.to_html     # <ins>/<del> markup
+result.as_json     # canonical JSON payload, identical when nested
 ```
 
 ## Example App
@@ -48,9 +50,22 @@ A self-contained Sinatra demo is in [`demo/`](demo/). It shows versioning, diffs
 ```bash
 cd demo
 bundle install
-ruby app.rb
-# open http://localhost:4567
+bundle exec rackup
+# open http://localhost:9292
 ```
+
+The demo loads the gem from the parent directory as a path dependency, so the
+`bundle exec` prefix is required. `bundle exec ruby app.rb` also works and
+serves on port 4567.
+
+Two sections: **Articles** covers markdown versioning, diffs, tags, and comments.
+**HTML & Sanitizer** uses `content_type :html` to show what `render(:html)` returns
+under each `config.html_sanitizer` mode, side by side, against content containing a
+`<script>` tag.
+
+The demo installs `rails-html-sanitizer` to demonstrate the recommended sanitizer
+setup, and `erubi` to turn on ERB escaping. Neither is a Docsmith dependency — the
+gem itself still has none beyond ActiveRecord, ActiveSupport, and diff-lcs.
 
 ## Documentation
 

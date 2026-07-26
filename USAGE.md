@@ -130,6 +130,35 @@ end
 
 Resolution order: **per-class `docsmith_config`** > **global `Docsmith.configure`** > **gem defaults**.
 
+### Rendering stored HTML safely — `html_sanitizer`
+
+Stored HTML is untrusted input. If any of your `content_type: :html` documents
+originated from a user, rendering them verbatim is **stored XSS**. Docsmith ships
+no sanitizer of its own: sanitizing safely requires a real HTML parser, and
+vendoring one would break the gem's zero-system-dependency guarantee.
+
+So `render(:html)` escapes html content by default, and you opt into rendering it:
+
+```ruby
+Docsmith.configure do |config|
+  # Default (html_sanitizer unset) — content is escaped inside
+  # <pre class="docsmith-html">. Safe, and visible enough that you notice it.
+
+  # Recommended. Rails already bundles this via ActionView, so no new gem:
+  config.html_sanitizer = ->(html) { Rails::HTML5::SafeListSanitizer.new.sanitize(html) }
+
+  # Verbatim passthrough. Only for HTML you generate yourself and fully trust:
+  config.html_sanitizer = :unsafe_raw
+end
+```
+
+Anything else — a String, a non-callable object — raises
+`Docsmith::InvalidHtmlSanitizer` rather than quietly falling back to raw output.
+
+This affects **only** `render(:html)` for `content_type: "html"`. Markdown and JSON
+were always escaped, and diff output (`Diff::Result#to_html`) escapes every change
+field regardless of content type.
+
 ---
 
 ## 6. Saving Versions
@@ -205,8 +234,62 @@ article.version(2).created_at       # => 2026-03-01 14:22:00 UTC
 
 # Render a version's content
 article.version(2).render(:html)    # => "<p>Body text at v2</p>"
-article.version(2).render(:json)    # => '{"version":2,"content":"..."}'
+article.version(2).render(:json)    # => JSON envelope string, see below
+article.version(2).export           # => the same envelope as a Hash
 ```
+
+### JSON export envelope
+
+`render(:json)` returns a **single shape for every `content_type`**, so one parser
+handles all of them:
+
+```ruby
+JSON.parse(article.version(2).render(:json))
+# => {
+#   "schema_version" => 1,
+#   "document_id"    => 7,
+#   "version_number" => 2,
+#   "content_type"   => "markdown",
+#   "content"        => "# Hello\n\nSecond draft.",
+#   "change_summary" => "Second draft",
+#   "author"         => { "type" => "User", "id" => 1 },
+#   "metadata"       => {},
+#   "created_at"     => "2026-03-01T14:22:00.000Z"
+# }
+```
+
+- **`content` is always the exact stored string**, byte for byte, for every content
+  type. Docsmith never reformats it: this is a versioning gem, and an export that
+  re-serialized the snapshot would not match what was versioned.
+- **`author` is type and id only**, or `null`. The gem never serializes your author
+  record — it cannot know which of its fields are personal data.
+- **`schema_version`** identifies the wire format. Branch on it rather than on the
+  gem version. It changes only when the payload shape changes.
+
+To embed a version in a larger response without a JSON round-trip, use `#export`,
+which returns the same Hash:
+
+```ruby
+render json: { article: article.as_json, version: article.version(2).export }
+```
+
+`DocumentVersion#as_json` is deliberately **not** overridden — `render json: @version`
+still returns plain ActiveRecord attributes.
+
+### Parsed JSON documents — `include_parsed`
+
+For `content_type: "json"` documents you can request the parsed document alongside
+the raw string:
+
+```ruby
+version.export(include_parsed: true)
+# => { ..., "content" => '{"title":"Doc"}', "data" => { "title" => "Doc" } }
+```
+
+`content` still holds the exact bytes; `data` is the parsed form. On a non-json
+document the option is a no-op. If the content does not parse, this raises
+`Docsmith::InvalidJsonContent` — the **default export path never parses**, so it
+cannot fail on malformed content.
 
 ---
 
@@ -266,11 +349,57 @@ document's `content_type`.
 result = article.diff_from(1)
 # => #<Docsmith::Diff::Result from_version: 1, to_version: 5, ...>
 
-result.additions   # => integer count of added tokens
-result.deletions   # => integer count of removed tokens
-result.to_html     # => HTML string with <ins>/<del> markup
-result.to_json     # => JSON string with stats and changes array
+result.insertions    # => count of PURE insertions
+result.deletions     # => count of PURE deletions
+result.replacements  # => count of spans replaced
+result.stats         # => all of the above plus "total"
+result.changes       # => grouped edits, see below
+result.to_html       # => HTML string with <ins>/<del> markup
+result.to_json       # => JSON string, see below
+result.as_json       # => the same payload as a Hash
 ```
+
+**`insertions` and `deletions` count only pure inserts and removals.** A changed
+span counts once as a `replacement`, not as one of each. For git-style totals, add
+`replacements` to either side:
+
+```ruby
+git_style_insertions = result.insertions + result.replacements
+```
+
+### What a change looks like
+
+Each entry in `changes` is a **contiguous run of edits collapsed into one**, with
+genuine character offsets and line numbers on **both** sides:
+
+```ruby
+# v1: "my document\n\nsecond para"
+# v2: "<h1>this is a new heading</h1>\n\nsecond para"
+result.changes
+# => [
+#   { type: :replace,
+#     old: { start: 0, end: 11, line: 1, column: 1, text: "my document" },
+#     new: { start: 0, end: 30, line: 1, column: 1,
+#            text: "<h1>this is a new heading</h1>" } }
+# ]
+```
+
+- **`type`** is `:insert`, `:delete`, or `:replace`.
+- **Both sides are always present.** A pure insertion carries a zero-width `old`
+  span (`start == end`, empty text) marking *where* it was inserted; a pure deletion
+  carries a zero-width `new` span. Every entry therefore has identical keys, so you
+  never branch on type to know which fields exist.
+- **`line` and `column` are real 1-indexed positions** in that document, and
+  `start`/`end` are character offsets (end exclusive). `content[start...end]` is
+  exactly `text`, so you can slice as much surrounding context as you want.
+- **`old` and `new` never share a coordinate space** — `old` offsets index the older
+  document, `new` offsets the newer one.
+
+> **Changed in 0.2.0.** Previously each *token* was its own entry, so a one-line
+> heading rewrite produced seven of them. Worse, the `position.line` they carried
+> was a **token index, not a line number** — it could exceed the document's line
+> count — and it silently mixed coordinate systems, using an old-document index for
+> deletions and a new-document index for additions.
 
 ### Diff between two named versions
 
@@ -293,22 +422,32 @@ result = article.diff_between(2, 4)
 # v2 content: "The quick red fox"
 result = article.diff_between(1, 2)
 result.changes
-# => [{ type: :modification, line: 3, old_content: "brown", new_content: "red" }]
-result.additions  # => 0
-result.deletions  # => 0
+# => [{ type: :replace,
+#       old: { start: 10, end: 15, line: 1, column: 11, text: "brown" },
+#       new: { start: 10, end: 13, line: 1, column: 11, text: "red" } }]
+result.stats
+# => { "insertions" => 0, "deletions" => 0, "replacements" => 1, "total" => 1 }
 ```
+
+Words between two edits keep them separate — `"the quick brown fox"` to
+`"the slow brown wolf"` yields **two** replaces, because `brown` is unchanged.
 
 **HTML example:**
 
 ```ruby
 # v1 content: "<p>Hello world</p>"
 # v2 content: "<p>Hello world</p><p>New paragraph</p>"
-# old tokens: ["<p>", "Hello", "world", "</p>"]
-# new tokens: ["<p>", "Hello", "world", "</p>", "<p>", "New", "paragraph", "</p>"]
-# LCS: first 4 tokens match exactly → 4 additions: "<p>", "New", "paragraph", "</p>"
+# The four added tokens ("<p>", "New", "paragraph", "</p>") are one contiguous
+# run, so they collapse into a single insert.
 result = article.diff_between(1, 2)
-result.additions  # => 4
+result.insertions          # => 1
+result.changes.first[:new][:text]
+# => "<p>New paragraph</p>"
 ```
+
+Note the tokenizer discards the whitespace *between* tokens, but an edit's `text`
+is sliced from the source between its offsets — so spaces and newlines inside a
+run are preserved verbatim.
 
 ### to_html output
 
@@ -325,16 +464,51 @@ result.to_html
 ```ruby
 JSON.parse(result.to_json)
 # => {
-#   "content_type" => "markdown",
-#   "from_version" => 1,
-#   "to_version"   => 3,
-#   "stats"        => { "additions" => 2, "deletions" => 1 },
-#   "changes"      => [
-#     { "type" => "addition",      "position" => { "line" => 5 }, "content" => "Ruby" },
-#     { "type" => "deletion",      "position" => { "line" => 3 }, "content" => "Python" },
-#     { "type" => "modification",  "position" => { "line" => 7 }, "old_content" => "foo", "new_content" => "bar" }
+#   "schema_version" => 1,
+#   "content_type"   => "markdown",
+#   "from_version"   => 1,
+#   "to_version"     => 3,
+#   "stats"          => { "insertions" => 1, "deletions" => 0,
+#                         "replacements" => 1, "total" => 2 },
+#   "changes"        => [
+#     { "type" => "replace",
+#       "old" => { "start" => 0,  "end" => 11, "line" => 1, "column" => 1,
+#                  "text" => "my document" },
+#       "new" => { "start" => 0,  "end" => 30, "line" => 1, "column" => 1,
+#                  "text" => "<h1>this is a new heading</h1>" } },
+#     { "type" => "insert",
+#       "old" => { "start" => 24, "end" => 24, "line" => 3, "column" => 13,
+#                  "text" => "" },
+#       "new" => { "start" => 43, "end" => 52, "line" => 3, "column" => 13,
+#                  "text" => " appended" } }
 #   ]
 # }
+```
+
+### Nesting a diff in a larger response
+
+`Diff::Result` implements `as_json`, so it serializes identically whether it is
+encoded on its own or nested anywhere inside another structure:
+
+```ruby
+render json: { diff: result }             # correct payload under "diff"
+render json: { diffs: [result, other] }   # correct payload in each element
+JSON.generate(result)                     # same as result.to_json
+```
+
+> **Fixed in 0.2.0.** `as_json` was previously undefined, so nesting fell through
+> to `Object#as_json` and produced a **different** payload from `to_json` — with no
+> `stats` key at all, and the raw internal change hashes in place of the documented
+> ones. If you worked around this by calling `JSON.parse(result.to_json)` before
+> nesting, you can now pass the result directly.
+
+`result.changes` is the same structure symbol-keyed, so there is exactly one model
+of what a change is:
+
+```ruby
+{ type: :replace,
+  old: { start: 0, end: 11, line: 1, column: 1, text: "my document" },
+  new: { start: 0, end: 30, line: 1, column: 1, text: "<h1>..." } }
 ```
 
 ---
@@ -474,7 +648,7 @@ v2 = Docsmith::VersionManager.save!(doc, author: nil, summary: "Revised intro")
 
 # Diff
 result = Docsmith::Diff.between(v1, v2)
-result.additions   # => number of added tokens
+result.insertions  # => number of pure insertions
 result.to_html     # => HTML diff markup
 
 # Restore
@@ -498,7 +672,6 @@ Docsmith::VersionManager.tag!(doc, version: 1, name: "golden", author: nil)
 | `max_versions` | `nil` | Max snapshots per document; `nil` = unlimited |
 | `content_extractor` | `nil` | Global proc overriding `content_field` |
 | `table_prefix` | `"docsmith"` | Table name prefix |
-| `diff_context_lines` | `3` | Context lines in diff output |
 
 **Error classes:**
 
