@@ -46,5 +46,20 @@ module Docsmith
       else raise ArgumentError, "Unknown render format: #{format}. Supported: :html, :json"
       end
     end
+
+    # The JSON export envelope as a Hash, for embedding in a larger API response
+    # without a JSON round-trip. Same shape as render(:json).
+    #
+    # Note this is deliberately NOT `as_json`. DocumentVersion is an
+    # ActiveRecord::Base, and overriding as_json would silently change what
+    # `render json: @version` returns for every app already relying on standard
+    # attribute serialization.
+    #
+    # @param options [Hash] :include_parsed adds "data" with the parsed document
+    # @return [Hash] string-keyed, JSON-ready
+    # @raise [Docsmith::InvalidJsonContent] if :include_parsed is set and content does not parse
+    def export(**options)
+      Rendering::JsonRenderer.new.to_h(self, **options)
+    end
   end
 end

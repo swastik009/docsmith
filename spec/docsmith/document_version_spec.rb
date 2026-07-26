@@ -76,4 +76,30 @@ RSpec.describe Docsmith::DocumentVersion do
       expect { version.render(:pdf) }.to raise_error(ArgumentError, /pdf/)
     end
   end
+
+  describe "#export" do
+    include FactoryBot::Syntax::Methods
+
+    let(:doc)     { create(:document, content: "# Hello", content_type: "markdown") }
+    let(:version) { create(:document_version, document: doc, content: "# Hello", content_type: "markdown", version_number: 1) }
+
+    it "returns the same envelope as render(:json), as a Hash" do
+      expect(version.export).to eq(JSON.parse(version.render(:json)))
+    end
+
+    it "forwards options to the renderer" do
+      json = create(:document_version, document: doc, version_number: 2,
+                                       content: '{"a":1}', content_type: "json")
+
+      expect(json.export(include_parsed: true)["data"]).to eq("a" => 1)
+    end
+
+    # Guards a deliberate decision: DocumentVersion is an ActiveRecord::Base, so
+    # overriding as_json would silently change `render json: @version` for every
+    # app already relying on standard attribute serialization.
+    it "does not override ActiveRecord's as_json" do
+      expect(version.as_json).to include("id", "document_id", "version_number", "content")
+      expect(version.as_json).not_to have_key("schema_version")
+    end
+  end
 end
