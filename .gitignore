@@ -20,3 +20,6 @@ vendor/bundle
 demo/*.sqlite3
 demo/*.sqlite3-shm
 demo/*.sqlite3-wal
+
+# RSpec example status persistence
+.rspec_status

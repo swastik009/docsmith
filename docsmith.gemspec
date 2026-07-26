@@ -26,7 +26,7 @@ Gem::Specification.new do |spec|
 
   spec.metadata["homepage_uri"]    = spec.homepage
   spec.metadata["source_code_uri"] = "https://github.com/swastik009/docsmith"
-  spec.metadata["changelog_uri"]   = "https://github.com/swastik009/docsmith/blob/main/CHANGELOG.md"
+  spec.metadata["changelog_uri"]   = "https://github.com/swastik009/docsmith/blob/master/CHANGELOG.md"
 
   # Specify which files should be added to the gem when it is released.
   # The `git ls-files -z` loads the files in the RubyGem that have been added into git.
@@ -34,7 +34,10 @@ Gem::Specification.new do |spec|
   spec.files = IO.popen(%w[git ls-files -z], chdir: __dir__, err: IO::NULL) do |ls|
     ls.readlines("\x0", chomp: true).reject do |f|
       (f == gemspec) ||
-        f.start_with?(*%w[bin/ test/ spec/ features/ .git .github appveyor Gemfile demo/])
+        f.start_with?(*%w[
+          bin/ test/ spec/ features/ .git .github appveyor Gemfile demo/
+          docs/ .rspec docsmith_spec.md
+        ])
     end
   end
   spec.bindir = 'exe'
@@ -50,7 +53,7 @@ Gem::Specification.new do |spec|
   # autoloads generators from lib/generators/. Keeping this out of the runtime
   # dependencies is deliberate: docsmith runs on plain ActiveRecord (the bundled
   # demo is Sinatra), and a runtime railties would force Rails on those users.
-  spec.add_development_dependency "railties",    ">= 7.0"
+  spec.add_development_dependency "railties",    "~> 7.0"
   spec.add_development_dependency "rspec",       "~> 3.12"
   spec.add_development_dependency "sqlite3",     "~> 1.4"
   spec.add_development_dependency "factory_bot", "~> 6.0"
