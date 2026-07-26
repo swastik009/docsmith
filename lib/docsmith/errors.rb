@@ -15,4 +15,14 @@ module Docsmith
 
   # Raised when tag_version! is called with a name already used on this document.
   class TagAlreadyExists < Error; end
+
+  # Raised when a JSON export is asked to parse content (include_parsed: true)
+  # on a version whose content_type is "json" but whose content is not valid JSON.
+  # The default export path never parses, so it never raises this.
+  class InvalidJsonContent < Error; end
+
+  # Raised when configuration.html_sanitizer is neither nil, :unsafe_raw, nor callable.
+  # Fails loudly rather than falling back, so a misconfigured sanitizer can never
+  # silently degrade into rendering untrusted HTML verbatim.
+  class InvalidHtmlSanitizer < Error; end
 end

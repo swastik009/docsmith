@@ -11,8 +11,43 @@ RSpec.describe Docsmith::Rendering::HtmlRenderer do
 
   describe "#render" do
     context "with html content_type" do
-      it "returns the content as-is" do
-        expect(renderer.render(stub_version(content: "<p>Hello</p>", content_type: "html"))).to eq("<p>Hello</p>")
+      let(:payload) { %(<p>Hi</p><script>alert(document.cookie)</script>) }
+
+      context "with no html_sanitizer configured (the default)" do
+        it "escapes the content instead of emitting it verbatim" do
+          html = renderer.render(stub_version(content: payload, content_type: "html"))
+
+          expect(html).to include("docsmith-html")
+          expect(html).to include("&lt;script&gt;")
+          expect(html).not_to include("<script>")
+        end
+      end
+
+      context "with a callable html_sanitizer" do
+        it "returns whatever the sanitizer produces" do
+          Docsmith.configure { |c| c.html_sanitizer = ->(raw) { raw.gsub(%r{<script.*?</script>}m, "") } }
+
+          html = renderer.render(stub_version(content: payload, content_type: "html"))
+
+          expect(html).to eq("<p>Hi</p>")
+        end
+      end
+
+      context "with html_sanitizer = :unsafe_raw" do
+        it "passes the content through verbatim" do
+          Docsmith.configure { |c| c.html_sanitizer = :unsafe_raw }
+
+          expect(renderer.render(stub_version(content: payload, content_type: "html"))).to eq(payload)
+        end
+      end
+
+      context "with a non-callable html_sanitizer" do
+        it "raises rather than silently degrading to raw output" do
+          Docsmith.configure { |c| c.html_sanitizer = "nope" }
+
+          expect { renderer.render(stub_version(content: payload, content_type: "html")) }
+            .to raise_error(Docsmith::InvalidHtmlSanitizer, /must respond to #call/)
+        end
       end
     end
 

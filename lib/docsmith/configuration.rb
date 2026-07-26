@@ -44,7 +44,24 @@ module Docsmith
 
     attr_accessor :default_content_field, :default_content_type, :auto_save,
                   :default_debounce, :max_versions, :content_extractor,
-                  :table_prefix, :diff_context_lines
+                  :table_prefix
+
+    # Controls how HtmlRenderer emits stored content for html documents.
+    #
+    # Stored HTML is untrusted: rendering it verbatim is stored XSS whenever the
+    # content originated from a user. Docsmith ships no sanitizer of its own —
+    # safe sanitizing needs a real HTML parser, and vendoring one would break the
+    # gem's zero-system-dependency guarantee.
+    #
+    # nil (default)  — escape the content. Safe, and visibly wrong, so it gets noticed.
+    # #call(html)    — your sanitizer. Rails apps already have one via ActionView:
+    #                    config.html_sanitizer = ->(html) {
+    #                      Rails::HTML5::SafeListSanitizer.new.sanitize(html)
+    #                    }
+    # :unsafe_raw    — verbatim passthrough. Only for content you produce yourself.
+    #
+    # @return [nil, #call, :unsafe_raw]
+    attr_accessor :html_sanitizer
 
     def initialize
       @default_content_field = DEFAULTS[:content_field]
@@ -54,7 +71,7 @@ module Docsmith
       @max_versions          = DEFAULTS[:max_versions]
       @content_extractor     = DEFAULTS[:content_extractor]
       @table_prefix          = "docsmith"
-      @diff_context_lines    = 3
+      @html_sanitizer        = nil
       @hooks                 = Hash.new { |h, k| h[k] = [] }
     end
 
